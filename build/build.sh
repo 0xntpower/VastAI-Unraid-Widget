@@ -8,7 +8,7 @@ ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 SRC_DIR="$ROOT_DIR/src/vastai/usr/local/emhttp/plugins/vastai"
 PLG_FILE="$ROOT_DIR/vastai.plg"
 
-VERSION=$(date +%Y.%m.%d)
+VERSION="2026.09.13.1"
 AUTHOR="0xntpower"
 PLUGIN_NAME="vastai"
 

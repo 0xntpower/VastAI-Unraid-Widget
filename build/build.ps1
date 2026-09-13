@@ -12,7 +12,7 @@ $plgFile = Join-Path $root "vastai.plg"
 Write-Host "Building standalone vastai.plg from: $srcDir" -ForegroundColor Cyan
 
 # Read version and metadata
-$version = Get-Date -Format "yyyy.MM.dd"
+$version = "2026.09.13.1"
 $author = "0xntpower"
 $pluginName = "vastai"
 
