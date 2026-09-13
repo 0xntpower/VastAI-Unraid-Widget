@@ -1,0 +1,55 @@
+# Operating system files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+
+# Editors and IDEs
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+*.swp
+*.swo
+*~
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+*.egg-info/
+
+# Local configuration and credentials
+*.key
+*.token
+*.secret
+*vast_api_key*
+/boot/
+*.cfg
+!src/**/default.cfg
+
+# Runtime and temporary cache files
+*.log
+/tmp/
+/cache/
+*.tmp
+*.cache
+
+# Build and package outputs
+pkg/
+dist/
+*.txz
+*.tar.gz
+*.tgz
+*.md5
+*.sha256
