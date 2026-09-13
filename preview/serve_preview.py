@@ -409,6 +409,17 @@ class UnraidPreviewHandler(SimpleHTTPRequestHandler):
                     self.wfile.write(f.read())
                 return
 
+        # Serve vastai.plg for direct local installation on Unraid
+        if path == '/vastai.plg':
+            plg_path = os.path.join(PROJECT_ROOT, 'vastai.plg')
+            if os.path.exists(plg_path):
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/xml')
+                self.end_headers()
+                with open(plg_path, 'rb') as f:
+                    self.wfile.write(f.read())
+                return
+
         # Default serve index.html
         if path == '/' or path == '/index.html':
             self.send_response(200)
