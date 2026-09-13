@@ -44,8 +44,8 @@ def fetch_live_vast_data():
         return None
 
     try:
-        mach_url = f"https://console.vast.ai/api/v0/machines?owner=me&api_key={LIVE_API_KEY}"
-        user_url = f"https://console.vast.ai/api/v0/users/current?api_key={LIVE_API_KEY}"
+        mach_url = f"https://console.vast.ai/api/v0/machines/?owner=me&api_key={LIVE_API_KEY}"
+        user_url = f"https://console.vast.ai/api/v0/users/current/?api_key={LIVE_API_KEY}"
 
         req = urllib.request.Request(mach_url, headers={'User-Agent': 'VastAI-Unraid-Widget/1.0'})
         with urllib.request.urlopen(req, timeout=7) as resp:
@@ -356,6 +356,20 @@ class UnraidPreviewHandler(SimpleHTTPRequestHandler):
         super().end_headers()
 
     def do_OPTIONS(self):
+        self.send_response(200)
+        self.end_headers()
+
+    def do_HEAD(self):
+        parsed = urllib.parse.urlparse(self.path)
+        path = parsed.path
+        if path == '/vastai.plg':
+            plg_path = os.path.join(PROJECT_ROOT, 'vastai.plg')
+            if os.path.exists(plg_path):
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/xml')
+                self.send_header('Content-Length', str(os.path.getsize(plg_path)))
+                self.end_headers()
+                return
         self.send_response(200)
         self.end_headers()
 

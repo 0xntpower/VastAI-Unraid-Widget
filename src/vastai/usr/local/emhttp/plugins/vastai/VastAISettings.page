@@ -172,14 +172,25 @@ function toggleApiKeyVisibility() {
 function testVastConnection() {
   const box = $('#vast_test_box');
   const btn = $('#vast_btn_test');
+  const keyField = $('#vast_api_key_field');
+  const typedKey = (keyField.val() || '').trim();
+
+  if (!typedKey) {
+    box.removeClass('vast-test-success').addClass('vast-test-error').show().html(
+      '<strong><i class="fa fa-exclamation-triangle"></i> No API Key Entered:</strong> Please paste your Vast.ai API key into the field above first.'
+    );
+    return;
+  }
+
   btn.prop('disabled', true).text('Testing…');
   box.removeClass('vast-test-success vast-test-error').show().html('<i class="fa fa-spinner fa-spin"></i> Connecting to Vast.ai API…');
 
   $.ajax({
     url: '/plugins/vastai/include/getvaststatus.php?force=1',
-    type: 'GET',
+    type: 'POST',
+    data: { test_key: typedKey },
     dataType: 'json',
-    timeout: 10000,
+    timeout: 12000,
     success: function(data) {
       btn.prop('disabled', false).text('Test Connection');
       if (data && data.success) {

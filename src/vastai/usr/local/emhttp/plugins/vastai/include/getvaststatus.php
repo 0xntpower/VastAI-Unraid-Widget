@@ -35,6 +35,15 @@ $cache_ttl    = max(10, (int) ($cfg['CACHE_TTL'] ?? 30));
 $show_balance = (($cfg['SHOW_BALANCE'] ?? '1') !== '0');
 $force_reload = isset($_GET['force']) && ($_GET['force'] === '1' || $_GET['force'] === 'true');
 
+$is_test_key = false;
+if (!empty($_POST['test_key'])) {
+    $api_key = trim($_POST['test_key']);
+    $is_test_key = true;
+} elseif (!empty($_GET['test_key'])) {
+    $api_key = trim($_GET['test_key']);
+    $is_test_key = true;
+}
+
 // If API key is not configured, inform the UI cleanly
 if (empty($api_key)) {
     echo json_encode([
@@ -46,8 +55,8 @@ if (empty($api_key)) {
     exit;
 }
 
-// Check cache if not forcing refresh
-if (!$force_reload && file_exists($cache_file)) {
+// Check cache if not forcing refresh and not testing an ad-hoc key
+if (!$force_reload && !$is_test_key && file_exists($cache_file)) {
     $mtime = filemtime($cache_file);
     $age = time() - $mtime;
     if ($age < $cache_ttl) {
@@ -72,7 +81,9 @@ function vast_api_get(string $url, int $timeout = 9): array {
     curl_setopt_array($ch, [
         CURLOPT_URL            => $url,
         CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_CONNECTTIMEOUT => 4,
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_MAXREDIRS      => 5,
+        CURLOPT_CONNECTTIMEOUT => 5,
         CURLOPT_TIMEOUT        => $timeout,
         CURLOPT_SSL_VERIFYPEER => true,
         CURLOPT_SSL_VERIFYHOST => 2,
@@ -97,14 +108,14 @@ function vast_api_get(string $url, int $timeout = 9): array {
 }
 
 $api_key_enc = urlencode($api_key);
-$machines_url = "https://console.vast.ai/api/v0/machines?owner=me&api_key={$api_key_enc}";
-$user_url     = "https://console.vast.ai/api/v0/users/current?api_key={$api_key_enc}";
+$machines_url = "https://console.vast.ai/api/v0/machines/?owner=me&api_key={$api_key_enc}";
+$user_url     = "https://console.vast.ai/api/v0/users/current/?api_key={$api_key_enc}";
 
 // 1. Fetch hosted machines
 $mach_res = vast_api_get($machines_url);
 if ($mach_res['errno'] !== 0 || $mach_res['code'] !== 200) {
-    // If request failed, check for stale cache fallback
-    if (file_exists($cache_file)) {
+    // If request failed, check for stale cache fallback (unless testing a custom key)
+    if (!$is_test_key && file_exists($cache_file)) {
         $stale_data = @file_get_contents($cache_file);
         if ($stale_data) {
             $json = json_decode($stale_data, true);
@@ -119,7 +130,12 @@ if ($mach_res['errno'] !== 0 || $mach_res['code'] !== 200) {
 
     $errMsg = $mach_res['error'] ?: "HTTP {$mach_res['code']}";
     if ($mach_res['code'] === 401 || $mach_res['code'] === 403) {
-        $errMsg = "Invalid API Key or unauthorized (HTTP {$mach_res['code']}). Please verify your key in Settings.";
+        $resp_json = @json_decode($mach_res['response'] ?? '', true);
+        if (is_array($resp_json) && !empty($resp_json['msg'])) {
+            $errMsg = $resp_json['msg'] . " (HTTP {$mach_res['code']})";
+        } else {
+            $errMsg = "Invalid API Key or unauthorized (HTTP {$mach_res['code']}). Please verify your key from console.vast.ai/manage-keys.";
+        }
     }
     echo json_encode([
         'success'   => false,
@@ -131,6 +147,16 @@ if ($mach_res['errno'] !== 0 || $mach_res['code'] !== 200) {
 }
 
 $raw_machines_data = json_decode($mach_res['response'], true);
+if (is_array($raw_machines_data) && isset($raw_machines_data['success']) && $raw_machines_data['success'] === false) {
+    $errMsg = $raw_machines_data['msg'] ?? $raw_machines_data['error'] ?? 'API error';
+    echo json_encode([
+        'success'   => false,
+        'error'     => $errMsg,
+        'http_code' => $mach_res['code'],
+        'timestamp' => time(),
+    ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+    exit;
+}
 $raw_machines = $raw_machines_data['machines'] ?? [];
 
 // 2. Fetch User Account Balance (optional)
