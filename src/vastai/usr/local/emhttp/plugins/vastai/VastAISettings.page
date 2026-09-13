@@ -1,0 +1,207 @@
+Menu="Utilities"
+Title="Vast.ai Monitor"
+Icon="vastai.png"
+Tag="cubes"
+---
+<?php
+/**
+ * Vast.ai Plugin - Settings Page
+ * Configures API keys, refresh intervals, cache policies, and layout.
+ */
+
+$base = '/usr/local/emhttp/plugins/vastai';
+$config_file = '/boot/config/plugins/vastai/vastai.cfg';
+$default_cfg = "$base/default.cfg";
+
+$cfg = [];
+if (file_exists($default_cfg)) {
+    $default_ini = @parse_ini_file($default_cfg);
+    if (is_array($default_ini)) {
+        $cfg = array_merge($cfg, $default_ini);
+    }
+}
+if (file_exists($config_file)) {
+    $user_ini = @parse_ini_file($config_file);
+    if (is_array($user_ini)) {
+        $cfg = array_merge($cfg, $user_ini);
+    }
+}
+
+$api_key      = (string) ($cfg['API_KEY'] ?? '');
+$interval     = (int) ($cfg['INTERVAL'] ?? 30);
+$cache_ttl    = (int) ($cfg['CACHE_TTL'] ?? 30);
+$column       = (string) ($cfg['COLUMN'] ?? 'column1');
+$show_balance = (($cfg['SHOW_BALANCE'] ?? '1') !== '0');
+$show_temp    = (($cfg['SHOW_TEMP'] ?? '1') !== '0');
+$show_specs   = (($cfg['SHOW_SPECS'] ?? '1') !== '0');
+?>
+
+<style>
+.vast-settings-banner {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 18px;
+  background: rgba(56, 189, 248, 0.08);
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  border-radius: 8px;
+  margin-bottom: 20px;
+}
+.vast-settings-banner img {
+  width: 48px;
+  height: 48px;
+  border-radius: 8px;
+}
+.vast-settings-banner h3 {
+  margin: 0 0 4px 0;
+  font-size: 1.2rem;
+}
+.vast-settings-banner p {
+  margin: 0;
+  opacity: 0.8;
+  font-size: 0.92rem;
+}
+.vast-test-result {
+  margin-top: 8px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  display: none;
+  font-size: 0.9rem;
+}
+.vast-test-success {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.35);
+}
+.vast-test-error {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.35);
+}
+.vast-input-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+</style>
+
+<div class="vast-settings-banner">
+  <img src="/plugins/vastai/images/vastai.png" alt="Vast.ai">
+  <div>
+    <h3>_(Vast.ai Dashboard Widget Configuration)_</h3>
+    <p>_(Monitor your listed Vast.ai machines, active rentals, real-time hourly income, and hardware telemetry right on the Unraid Dashboard.)_</p>
+  </div>
+</div>
+
+<form markdown="1" method="POST" action="/update.php" target="progressFrame">
+<input type="hidden" name="#file" value="vastai/vastai.cfg">
+
+_(Vast.ai API Key)_:
+: <div class="vast-input-group">
+    <input type="password" id="vast_api_key_field" name="API_KEY" style="width: 380px;" value="<?=htmlspecialchars($api_key, ENT_QUOTES)?>" placeholder="_(Enter your Vast.ai API Key)_" required>
+    <button type="button" class="button" onclick="toggleApiKeyVisibility()"><i id="vast_eye_icon" class="fa fa-eye"></i></button>
+    <button type="button" class="button" id="vast_btn_test" onclick="testVastConnection()">_(Test Connection)_</button>
+  </div>
+  <div id="vast_test_box" class="vast-test-result"></div>
+  <span style="font-size: 0.85rem; opacity: 0.75;">
+    _(Obtain or generate your API key from the)_ <a href="https://console.vast.ai/manage-keys/" target="_blank" rel="noopener">_(Vast.ai Key Management Console)_</a>.
+  </span>
+
+_(Default Refresh Interval)_:
+: <select name="INTERVAL">
+    <option value="10"  <?=$interval===10 ?'selected':''?>>10 _(seconds)_</option>
+    <option value="30"  <?=$interval===30 ?'selected':''?>>30 _(seconds - Recommended)_</option>
+    <option value="60"  <?=$interval===60 ?'selected':''?>>60 _(seconds)_</option>
+    <option value="120" <?=$interval===120?'selected':''?>>2 _(minutes)_</option>
+    <option value="0"   <?=$interval===0  ?'selected':''?>>_(Off / Manual only)_</option>
+  </select>
+  <span style="font-size: 0.85rem; opacity: 0.75;">_(Interval for automatic background status polling on the dashboard.)_</span>
+
+_(Local Cache Expiration)_:
+: <select name="CACHE_TTL">
+    <option value="15"  <?=$cache_ttl===15 ?'selected':''?>>15 _(seconds)_</option>
+    <option value="30"  <?=$cache_ttl===30 ?'selected':''?>>30 _(seconds - Recommended)_</option>
+    <option value="60"  <?=$cache_ttl===60 ?'selected':''?>>60 _(seconds)_</option>
+    <option value="120" <?=$cache_ttl===120?'selected':''?>>2 _(minutes)_</option>
+  </select>
+  <span style="font-size: 0.85rem; opacity: 0.75;">_(Protects against API rate limits across multiple open dashboard tabs.)_</span>
+
+_(Dashboard Placement)_:
+: <select name="COLUMN">
+    <option value="column1" <?=$column==='column1'?'selected':''?>>_(Left Column)_</option>
+    <option value="column2" <?=$column==='column2'?'selected':''?>>_(Middle Column)_</option>
+    <option value="column3" <?=$column==='column3'?'selected':''?>>_(Right Column)_</option>
+  </select>
+
+_(Show Account Balance)_:
+: <select name="SHOW_BALANCE">
+    <option value="1" <?=$show_balance?'selected':''?>>_(Yes)_</option>
+    <option value="0" <?=!$show_balance?'selected':''?>>_(No)_</option>
+  </select>
+
+_(Show Temperatures)_:
+: <select name="SHOW_TEMP">
+    <option value="1" <?=$show_temp?'selected':''?>>_(Yes)_</option>
+    <option value="0" <?=!$show_temp?'selected':''?>>_(No)_</option>
+  </select>
+
+_(Show Hardware Specs)_:
+: <select name="SHOW_SPECS">
+    <option value="1" <?=$show_specs?'selected':''?>>_(Yes)_</option>
+    <option value="0" <?=!$show_specs?'selected':''?>>_(No)_</option>
+  </select>
+
+&nbsp;
+: <input type="submit" value="_(Apply)_">
+
+</form>
+
+<script>
+function toggleApiKeyVisibility() {
+  const f = document.getElementById('vast_api_key_field');
+  const icon = document.getElementById('vast_eye_icon');
+  if (f.type === 'password') {
+    f.type = 'text';
+    icon.className = 'fa fa-eye-slash';
+  } else {
+    f.type = 'password';
+    icon.className = 'fa fa-eye';
+  }
+}
+
+function testVastConnection() {
+  const box = $('#vast_test_box');
+  const btn = $('#vast_btn_test');
+  btn.prop('disabled', true).text('Testing…');
+  box.removeClass('vast-test-success vast-test-error').show().html('<i class="fa fa-spinner fa-spin"></i> Connecting to Vast.ai API…');
+
+  $.ajax({
+    url: '/plugins/vastai/include/getvaststatus.php?force=1',
+    type: 'GET',
+    dataType: 'json',
+    timeout: 10000,
+    success: function(data) {
+      btn.prop('disabled', false).text('Test Connection');
+      if (data && data.success) {
+        const sum = data.summary || {};
+        const count = sum.total_machines || 0;
+        const rented = sum.rented_machines || 0;
+        box.addClass('vast-test-success').html(
+          '<strong><i class="fa fa-check-circle"></i> Connection Successful!</strong><br>' +
+          'Found ' + count + ' machine(s) (' + rented + ' currently rented). Total earnings rate: $' + (sum.total_earn_hour || 0).toFixed(3) + '/hr. Account balance: $' + (sum.account_balance || 0).toFixed(2)
+        );
+      } else {
+        box.addClass('vast-test-error').html(
+          '<strong><i class="fa fa-times-circle"></i> Connection Failed:</strong> ' + (data.error || 'Unknown error occurred.')
+        );
+      }
+    },
+    error: function(xhr, status, err) {
+      btn.prop('disabled', false).text('Test Connection');
+      box.addClass('vast-test-error').html(
+        '<strong><i class="fa fa-times-circle"></i> Request Failed:</strong> ' + status + ' - ' + err
+      );
+    }
+  });
+}
+</script>

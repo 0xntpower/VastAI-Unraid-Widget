@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="black">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Unraid OS Dashboard - Vast.ai Native Monitor</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+  <link rel="stylesheet" href="/plugins/vastai/styles/vastai.css">
+  <script src="https://code.jquery.com/jquery-3.6.4.min.js"></script>
+
+  <style>
+    /* Unraid Standard Theme System */
+    :root {
+      --font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, "Helvetica Neue", Arial, sans-serif;
+    }
+
+    /* Unraid Black (Dark Default) - matching the user's screenshot */
+    html[data-theme="black"] {
+      --bg-body: #1c1d1f;
+      --bg-header: #141517;
+      --bg-card: #22252a;
+      --text-main: #e6edf3;
+      --text-muted: #8b949e;
+      --border-color: rgba(255, 255, 255, 0.08);
+      --table-header: #1a1c20;
+      --control-bg: #2d3139;
+      --accent: #f15a24;
+    }
+
+    /* Unraid White (Light) */
+    html[data-theme="white"] {
+      --bg-body: #f4f5f7;
+      --bg-header: #ffffff;
+      --bg-card: #ffffff;
+      --text-main: #1f2937;
+      --text-muted: #6b7280;
+      --border-color: rgba(0, 0, 0, 0.1);
+      --table-header: #f9fafb;
+      --control-bg: #e5e7eb;
+      --accent: #f15a24;
+    }
+
+    /* Unraid Azure */
+    html[data-theme="azure"] {
+      --bg-body: #0b1528;
+      --bg-header: #0f203d;
+      --bg-card: #13274a;
+      --text-main: #e0f2fe;
+      --text-muted: #7dd3fc;
+      --border-color: rgba(56, 189, 248, 0.15);
+      --table-header: #0c1b33;
+      --control-bg: #1e3a6c;
+      --accent: #38bdf8;
+    }
+
+    /* Unraid Gray */
+    html[data-theme="gray"] {
+      --bg-body: #23272d;
+      --bg-header: #2d3239;
+      --bg-card: #343a42;
+      --text-main: #f3f4f6;
+      --text-muted: #9ca3af;
+      --border-color: rgba(255, 255, 255, 0.1);
+      --table-header: #292e35;
+      --control-bg: #3f4650;
+      --accent: #f97316;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: var(--font-family);
+      background-color: var(--bg-body);
+      color: var(--text-main);
+      font-size: 13px;
+      line-height: 1.4;
+    }
+
+    /* Top Preview Control Bar */
+    .preview-bar {
+      background: #0f1115;
+      color: #94a3b8;
+      padding: 6px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+      font-size: 12px;
+    }
+    .preview-select {
+      background: #22252a;
+      color: #f8fafc;
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 3px;
+      padding: 3px 8px;
+      font-size: 11px;
+      cursor: pointer;
+    }
+
+    /* Unraid Top Nav Bar */
+    .unraid-nav {
+      background: var(--bg-header);
+      border-bottom: 1px solid var(--border-color);
+      padding: 0 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 48px;
+    }
+    .unraid-logo {
+      font-weight: 800;
+      font-size: 16px;
+      letter-spacing: -0.02em;
+    }
+    .unraid-logo span { color: #f15a24; }
+    .unraid-menu {
+      display: flex;
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      height: 100%;
+    }
+    .unraid-menu li { height: 100%; }
+    .unraid-menu a {
+      display: flex;
+      align-items: center;
+      height: 100%;
+      padding: 0 14px;
+      color: var(--text-muted);
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 13px;
+      border-bottom: 2px solid transparent;
+    }
+    .unraid-menu a.active {
+      color: var(--text-main);
+      border-bottom-color: #f15a24;
+    }
+
+    /* Unraid Subbar */
+    .unraid-subbar {
+      padding: 8px 20px;
+      background: var(--bg-header);
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      font-size: 11.5px;
+      color: var(--text-muted);
+    }
+    .unraid-subbar strong { color: var(--text-main); }
+    .unraid-badge-online {
+      color: #4cd964;
+      font-weight: 600;
+    }
+
+    /* 3-Column Dashboard Grid */
+    .dashboard-container {
+      max-width: 1750px;
+      margin: 16px auto;
+      padding: 0 16px;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+      align-items: start;
+    }
+
+    @media (max-width: 1200px) {
+      .dashboard-container { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 800px) {
+      .dashboard-container { grid-template-columns: 1fr; }
+    }
+
+    /* Native Unraid Tile Container */
+    table.dashboard {
+      width: 100%;
+      border-collapse: collapse;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
+      overflow: hidden;
+      margin-bottom: 16px;
+    }
+
+    table.dashboard tbody tr:first-child td {
+      background: var(--table-header);
+      padding: 9px 14px;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    table.dashboard tbody tr:nth-child(2) td {
+      padding: 10px 14px;
+    }
+
+    .tile-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+    }
+    .tile-header-left {
+      display: flex;
+      align-items: center;
+    }
+    .tile-header-right {
+      display: flex;
+      align-items: center;
+    }
+
+    /* Native Simulated Array Tile */
+    .native-subtable {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+    .native-subtable th {
+      font-size: 10.5px;
+      color: var(--text-muted, #8c8c8c);
+      font-weight: 600;
+      text-transform: uppercase;
+      text-align: left;
+      padding: 4px 6px;
+      border-bottom: 1px solid var(--border-color);
+    }
+    .native-subtable td {
+      padding: 6px;
+      vertical-align: middle;
+      border-bottom: 1px solid var(--border-color);
+    }
+    .usage-bar {
+      display: inline-block;
+      width: 60px;
+      height: 8px;
+      background: rgba(255,255,255,0.15);
+      border-radius: 0;
+      vertical-align: middle;
+      margin-left: 6px;
+    }
+    .usage-bar-fill {
+      height: 100%;
+      background: #4cd964;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Toolbar -->
+  <div class="preview-bar">
+    <div style="display: flex; align-items: center; gap: 8px;">
+      <span style="font-weight: 700; color: #fff;"><i class="fa fa-television"></i> UNRAID DASHBOARD</span>
+      <span style="opacity: 0.6;">| Native Design Language Preview</span>
+    </div>
+    <div style="display: flex; align-items: center; gap: 14px;">
+      <div>
+        <span>Theme:</span>
+        <select id="theme_select" class="preview-select">
+          <option value="black">Black (Dark - Matching Screenshot)</option>
+          <option value="white">White (Light Theme)</option>
+          <option value="azure">Azure Theme</option>
+          <option value="gray">Gray Theme</option>
+        </select>
+      </div>
+      <div>
+        <span>Scenario:</span>
+        <select id="scenario_select" class="preview-select">
+          <option value="live">⚡ Live Vast.ai Account Data (vast-gpu)</option>
+          <option value="multi">🚀 Multi-Machine Fleet (H100 + 4090 + 3060 Ti)</option>
+          <option value="offline">⚠️ Machine Offline State</option>
+          <option value="unconfigured">🔑 Not Configured State</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <!-- Unraid Nav -->
+  <header class="unraid-nav">
+    <div class="unraid-logo">
+      <i class="fa fa-cube" style="color: #f15a24;"></i> UNRAID<span>OS</span>
+    </div>
+    <ul class="unraid-menu">
+      <li><a href="#" class="active"><i class="fa fa-tachometer"></i>&nbsp;Dashboard</a></li>
+      <li><a href="#">Main</a></li>
+      <li><a href="#">Shares</a></li>
+      <li><a href="#">Users</a></li>
+      <li><a href="#">Settings</a></li>
+      <li><a href="#">Plugins</a></li>
+      <li><a href="#">Tools</a></li>
+    </ul>
+  </header>
+
+  <!-- Subbar -->
+  <div class="unraid-subbar">
+    <span class="unraid-badge-online"><i class="fa fa-circle" style="font-size: 8px;"></i> Array Started</span>
+    <span>Uptime: <strong>17 days, 17 hours, 48 minutes</strong></span>
+    <span>Model: <strong>Custom</strong></span>
+    <span>CPU: <strong>AMD Ryzen Threadripper PRO 3945WX 12-Cores @ 4000 MHz</strong></span>
+  </div>
+
+  <!-- Main Dashboard Grid -->
+  <main class="dashboard-container">
+
+    <!-- Column 1: Vast.ai Widget -->
+    <div class="dash-column">
+      <table class="dashboard">
+        <tbody title="VAST.AI" id="vast_tile" data-interval="30">
+          <tr>
+            <td>
+              <span class="tile-header">
+                <span class="tile-header-left">
+                  <i class="fa fa-cubes vast-tile-glyph"></i>
+                  <span class="vast-tile-title">VAST.AI</span>
+                  <span id="vast_subtitle" class="vast-tile-sub">Connecting…</span>
+                </span>
+                <span class="tile-header-right">
+                  <span class="vast-header-controls">
+                    <select id="vast_int" class="auto" title="Refresh interval">
+                      <option value="10">10 s</option>
+                      <option value="30" selected>30 s</option>
+                      <option value="60">60 s</option>
+                      <option value="120">2 m</option>
+                      <option value="0">off</option>
+                    </select>
+                    <a href="javascript:void(0)" id="vast_btn_refresh" title="Refresh Now"><i id="vast_refresh_icon" class="fa fa-refresh control"></i></a>
+                    <a href="#" title="Vast.ai Settings"><i class="fa fa-fw fa-cog control"></i></a>
+                    <i class="fa fa-chevron-up control" title="Toggle Content"></i>
+                  </span>
+                </span>
+              </span>
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <div id="vast_widget_container">
+                <div class="vast-msg-box">
+                  <i class="fa fa-spinner fa-spin"></i> Loading Vast.ai status…
+                </div>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      <!-- Simulated Motherboard Tile (from screenshot) -->
+      <table class="dashboard">
+        <tbody>
+          <tr>
+            <td>
+              <span class="tile-header">
+                <span class="tile-header-left">
+                  <i class="fa fa-laptop" style="font-size: 1.3rem; margin-right: 8px;"></i>
+                  <span style="font-size: 13px; font-weight: 700; text-transform: uppercase;">MOTHERBOARD</span>
+                </span>
+                <span class="tile-header-right">
+                  <i class="fa fa-cog control" style="margin-right: 8px; font-size: 13px; color: var(--text-muted);"></i>
+                  <i class="fa fa-chevron-up control" style="font-size: 13px; color: var(--text-muted);"></i>
+                </span>
+              </span>
+            </td>
+          </tr>
+          <tr>
+            <td style="font-size: 11.5px; color: var(--text-muted);">
+              <div style="font-weight: 600; color: var(--text-main);">LENOVO 1046 , Version NO DPK</div>
+              <div>LENOVO, Version S07KT68A</div>
+              <div>BIOS dated: Fri 26 Sep 2025 12:00 AM</div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Column 2: Simulated Processor Tile (from screenshot) -->
+    <div class="dash-column">
+      <table class="dashboard">
+        <tbody>
+          <tr>
+            <td>
+              <span class="tile-header">
+                <span class="tile-header-left">
+                  <i class="fa fa-microchip" style="font-size: 1.3rem; margin-right: 8px;"></i>
+                  <span style="font-size: 13px; font-weight: 700; text-transform: uppercase;">PROCESSOR</span>
+                  <span style="font-size: 11.5px; color: var(--text-muted); margin-left: 8px;">AMD Ryzen Threadripper PRO 3945WX</span>
+                </span>
+                <span class="tile-header-right">
+                  <i class="fa fa-cog control" style="margin-right: 8px; font-size: 13px; color: var(--text-muted);"></i>
+                  <i class="fa fa-chevron-up control" style="font-size: 13px; color: var(--text-muted);"></i>
+                </span>
+              </span>
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <div style="display: flex; justify-content: space-between; font-size: 12px; color: var(--text-muted); margin-bottom: 6px;">
+                <span>Total Power: <strong>103.74 W</strong> | Temperature: <strong>78 °C</strong></span>
+                <span style="color: #38bdf8; cursor: pointer;">Hide details</span>
+              </div>
+              <div style="display: flex; align-items: center; justify-content: space-between; font-size: 12px; margin-bottom: 8px;">
+                <span>Overall Load: <strong>21%</strong></span>
+                <span>30 s <i class="fa fa-bar-chart"></i></span>
+              </div>
+              <div style="height: 8px; background: rgba(255,255,255,0.15); margin-bottom: 12px;">
+                <div style="height: 100%; width: 21%; background: #4cd964;"></div>
+              </div>
+              <table style="width: 100%; font-size: 11px; color: var(--text-muted);">
+                <tr>
+                  <td>CPU 0 - HT 12</td><td>41% <span class="usage-bar"><span class="usage-bar-fill" style="width: 41%;"></span></span></td>
+                  <td>CPU 6 - HT 18</td><td>42% <span class="usage-bar"><span class="usage-bar-fill" style="width: 42%;"></span></span></td>
+                </tr>
+                <tr>
+                  <td>CPU 1 - HT 13</td><td>31% <span class="usage-bar"><span class="usage-bar-fill" style="width: 31%;"></span></span></td>
+                  <td>CPU 7 - HT 19</td><td style="color: #ff9500;">72% <span class="usage-bar"><span class="usage-bar-fill" style="width: 72%; background: #ff9500;"></span></span></td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Column 3: Simulated Array Tile (from screenshot) -->
+    <div class="dash-column">
+      <table class="dashboard">
+        <tbody>
+          <tr>
+            <td>
+              <span class="tile-header">
+                <span class="tile-header-left">
+                  <i class="fa fa-database" style="font-size: 1.3rem; margin-right: 8px;"></i>
+                  <span style="font-size: 13px; font-weight: 700; text-transform: uppercase;">ARRAY</span>
+                  <span style="font-size: 11.5px; color: var(--text-muted); margin-left: 8px;">3.98 TB used of 5 TB (79.6 %)</span>
+                </span>
+                <span class="tile-header-right">
+                  <i class="fa fa-cog control" style="margin-right: 8px; font-size: 13px; color: var(--text-muted);"></i>
+                  <i class="fa fa-chevron-up control" style="font-size: 13px; color: var(--text-muted);"></i>
+                </span>
+              </span>
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <table class="native-subtable">
+                <thead>
+                  <tr>
+                    <th>DEVICE</th>
+                    <th>STATUS</th>
+                    <th>TEMP</th>
+                    <th>SMART</th>
+                    <th>UTILIZATION</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><i class="fa fa-hdd-o" style="color: #38bdf8; margin-right: 4px;"></i> Disk 1</td>
+                    <td><i class="fa fa-circle" style="color: #4cd964; font-size: 7px;"></i> active</td>
+                    <td style="color: #4cd964;">45 °C</td>
+                    <td style="color: #4cd964;"><i class="fa fa-check"></i> healthy</td>
+                    <td>80% <span class="usage-bar"><span class="usage-bar-fill" style="width: 80%;"></span></span></td>
+                  </tr>
+                  <tr>
+                    <td><i class="fa fa-hdd-o" style="color: #38bdf8; margin-right: 4px;"></i> Disk 2</td>
+                    <td><i class="fa fa-circle" style="color: #4cd964; font-size: 7px;"></i> active</td>
+                    <td style="color: #4cd964;">38 °C</td>
+                    <td style="color: #4cd964;"><i class="fa fa-check"></i> healthy</td>
+                    <td>91% <span class="usage-bar"><span class="usage-bar-fill" style="width: 91%;"></span></span></td>
+                  </tr>
+                  <tr>
+                    <td><i class="fa fa-hdd-o" style="color: #38bdf8; margin-right: 4px;"></i> Disk 3</td>
+                    <td><i class="fa fa-circle" style="color: #4cd964; font-size: 7px;"></i> active</td>
+                    <td style="color: #ff9500;">48 °C</td>
+                    <td style="color: #ff9500;"><i class="fa fa-exclamation-triangle"></i> error</td>
+                    <td>67% <span class="usage-bar"><span class="usage-bar-fill" style="width: 67%;"></span></span></td>
+                  </tr>
+                </tbody>
+              </table>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+  </main>
+
+  <!-- Load JavaScript -->
+  <script src="/plugins/vastai/javascript/vastai.js"></script>
+
+  <script>
+    $('#theme_select').on('change', function () {
+      $('html').attr('data-theme', $(this).val());
+    });
+
+    $('#scenario_select').on('change', function () {
+      const scen = $(this).val();
+      $.get('/api/status?scenario=' + scen, function () {
+        window.vastai_refresh(true);
+      });
+    });
+  </script>
+</body>
+</html>
