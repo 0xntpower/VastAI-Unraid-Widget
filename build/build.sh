@@ -25,6 +25,8 @@ cat <<EOF > "$PLG_FILE"
   <!ENTITY name      "$PLUGIN_NAME">
   <!ENTITY author    "$AUTHOR">
   <!ENTITY version   "$VERSION">
+  <!ENTITY github    "0xntpower/VastAI-Unraid-Widget">
+  <!ENTITY pluginURL "https://raw.githubusercontent.com/&github;/main/&name;.plg">
   <!ENTITY plugin    "/boot/config/plugins/&name;">
   <!ENTITY emhttp    "/usr/local/emhttp/plugins/&name;">
 ]>
@@ -32,6 +34,7 @@ cat <<EOF > "$PLG_FILE"
 <PLUGIN name="&name;"
         author="&author;"
         version="&version;"
+        pluginURL="&pluginURL;"
         launch="Settings/VastAISettings"
         icon="cubes"
         min="6.12.0">

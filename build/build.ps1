@@ -48,6 +48,8 @@ $plgContent = @"
   <!ENTITY name      "$pluginName">
   <!ENTITY author    "$author">
   <!ENTITY version   "$version">
+  <!ENTITY github    "0xntpower/VastAI-Unraid-Widget">
+  <!ENTITY pluginURL "https://raw.githubusercontent.com/&github;/main/&name;.plg">
   <!ENTITY plugin    "/boot/config/plugins/&name;">
   <!ENTITY emhttp    "/usr/local/emhttp/plugins/&name;">
 ]>
@@ -55,6 +57,7 @@ $plgContent = @"
 <PLUGIN name="&name;"
         author="&author;"
         version="&version;"
+        pluginURL="&pluginURL;"
         launch="Settings/VastAISettings"
         icon="cubes"
         min="6.12.0">
