@@ -60,6 +60,7 @@ $plgContent = @"
   <!ENTITY version   "$version">
   <!ENTITY github    "0xntpower/VastAI-Unraid-Widget">
   <!ENTITY pluginURL "https://raw.githubusercontent.com/&github;/main/&name;.plg">
+  <!ENTITY support   "https://forums.unraid.net/topic/200608-plugin-vastai-dashboard-tile/">
   <!ENTITY plugin    "/boot/config/plugins/&name;">
   <!ENTITY emhttp    "/usr/local/emhttp/plugins/&name;">
 ]>
@@ -74,6 +75,7 @@ $plgContent = @"
         author="&author;"
         version="&version;"
         pluginURL="&pluginURL;"
+        support="&support;"
         launch="Settings/VastAISettings"
         icon="vastai.png"
         min="6.12.0">

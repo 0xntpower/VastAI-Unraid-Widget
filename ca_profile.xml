@@ -4,9 +4,10 @@
     Vast.ai Monitor for Unraid. A single dashboard plugin that shows the status of your
     Vast.ai host machines directly on the Unraid Dashboard: rental state, live hourly and
     projected daily earnings, GPU temperatures, reliability scores and host hardware specs,
-    laid out to match Unraid's native dashboard tiles. Support is handled through GitHub
-    issues on the project repository.
+    laid out to match Unraid's native dashboard tiles. Support is handled through the
+    Unraid forum thread, or GitHub issues on the project repository.
   </Profile>
   <Icon>https://raw.githubusercontent.com/0xntpower/VastAI-Unraid-Widget/main/src/vastai/usr/local/emhttp/plugins/vastai/images/vastai.png</Icon>
   <WebPage>https://github.com/0xntpower/VastAI-Unraid-Widget</WebPage>
+  <Forum>https://forums.unraid.net/topic/200608-plugin-vastai-dashboard-tile/</Forum>
 </CommunityApplications>

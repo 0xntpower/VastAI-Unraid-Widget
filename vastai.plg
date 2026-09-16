@@ -2,9 +2,10 @@
 <!DOCTYPE PLUGIN [
   <!ENTITY name      "vastai">
   <!ENTITY author    "0xntpower">
-  <!ENTITY version   "2026.09.16.2345">
+  <!ENTITY version   "2026.09.17.0040">
   <!ENTITY github    "0xntpower/VastAI-Unraid-Widget">
   <!ENTITY pluginURL "https://raw.githubusercontent.com/&github;/main/&name;.plg">
+  <!ENTITY support   "https://forums.unraid.net/topic/200608-plugin-vastai-dashboard-tile/">
   <!ENTITY plugin    "/boot/config/plugins/&name;">
   <!ENTITY emhttp    "/usr/local/emhttp/plugins/&name;">
 ]>
@@ -19,6 +20,7 @@
         author="&author;"
         version="&version;"
         pluginURL="&pluginURL;"
+        support="&support;"
         launch="Settings/VastAISettings"
         icon="vastai.png"
         min="6.12.0">
@@ -26,7 +28,7 @@
 <CHANGES>
 ##Vast.ai Monitor
 
-###2026.09.16.2345
+###2026.09.17.0040
 - The plugin now has an icon everywhere Unraid shows one. The Plugins page entry,
   the Settings and Utilities nav entry and the dashboard tile all use the Vast.ai
   mark instead of a generic glyph or a missing image.

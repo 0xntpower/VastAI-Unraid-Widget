@@ -223,6 +223,18 @@ if os.path.exists(tpl) and os.path.exists(plg):
 sys.exit(rc)
 PY
 
+# The support URL appears in three files that Unraid and CA read separately.
+# Liveness is deliberately not checked here, because a thread can sit in
+# moderation and CI should not depend on that. Consistency is checked instead.
+SUP_PLG=$(grep -oE '<!ENTITY support   "[^"]*"' "$PLG" | cut -d'"' -f2)
+SUP_TPL=$(grep -oE '<Support>[^<]*</Support>' "$ROOT/templates/vastai.xml" | cut -d'>' -f2 | cut -d'<' -f1)
+SUP_PRO=$(grep -oE '<Forum>[^<]*</Forum>' "$ROOT/ca_profile.xml" | cut -d'>' -f2 | cut -d'<' -f1)
+if [ -n "$SUP_PLG" ] && [ "$SUP_PLG" = "$SUP_TPL" ] && [ "$SUP_PLG" = "$SUP_PRO" ]; then
+  pass "support URL is identical in the manifest, CA template and CA profile"
+else
+  bad "support URL differs: manifest='$SUP_PLG' template='$SUP_TPL' profile='$SUP_PRO'"
+fi
+
 echo
 echo "== syntax =="
 if command -v php >/dev/null 2>&1; then
