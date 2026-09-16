@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Plugin>
+  <Name>Vast.ai Monitor</Name>
+  <PluginURL>https://raw.githubusercontent.com/0xntpower/VastAI-Unraid-Widget/main/vastai.plg</PluginURL>
+  <Support>https://github.com/0xntpower/VastAI-Unraid-Widget/issues</Support>
+  <Project>https://github.com/0xntpower/VastAI-Unraid-Widget</Project>
+  <Icon>https://raw.githubusercontent.com/0xntpower/VastAI-Unraid-Widget/main/src/vastai/usr/local/emhttp/plugins/vastai/images/vastai.png</Icon>
+  <Category>Tools:System</Category>
+  <Overview>
+    Adds a dashboard tile for your Vast.ai host machines.
+
+    Shows each machine's rental state (on-demand, interruptible, reserved, listed, unlisted
+    or offline), live hourly earnings and projected daily income, GPU model and VRAM, real
+    time GPU temperature with colour thresholds, and host reliability score. An expandable
+    details row adds CPU, RAM, storage and network bandwidth. A summary line shows combined
+    earnings across the fleet and your account balance.
+
+    Responses are cached server side with a configurable TTL so several open dashboard tabs
+    do not each hit the Vast.ai API, and the tile falls back to the last good response and
+    labels it clearly when the API is unreachable.
+
+    Requires a Vast.ai account and an API key, which is stored on the flash drive readable
+    only by root and is scrubbed when the plugin is uninstalled.
+  </Overview>
+</Plugin>

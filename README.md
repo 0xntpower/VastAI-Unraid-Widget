@@ -54,6 +54,20 @@ The key is sent to Vast.ai over HTTPS with certificate verification enabled. The
 has no other network destination and no third-party runtime dependencies.
 - **Show account balance**: Show or hide your account balance in the summary line.
 
+## Listing on Community Applications
+
+The repository carries the two files Community Apps requires for a plugin listing:
+
+- `ca_profile.xml` at the root, with the `Profile` section CA needs to finalize a submission
+- `templates/vastai.xml`, the plugin entry, pointing `PluginURL` at the published manifest
+
+Submitting is a manual step at [ca.unraid.net/submit/new](https://ca.unraid.net/submit/new).
+CA scans the repository, validates both files, checks for duplicate listings and shows a
+preview. Plugin submissions are then reviewed by a moderator rather than auto-published.
+
+`tests/check.sh` validates both files and asserts that the template `PluginURL` still matches
+the manifest, so a repository rename cannot silently break the listing.
+
 ## Building from source
 
 `vastai.plg` is a **generated file**. Every source under `src/` is inlined into it, so edit

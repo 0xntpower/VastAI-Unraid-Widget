@@ -174,6 +174,56 @@ else:
 PY
 
 echo
+echo "== Community Applications submission files =="
+# CA blocks finalization without a ca_profile.xml carrying a non-empty Profile,
+# and a plugin entry needs a PluginURL that resolves to the live manifest.
+python3 - "$ROOT" <<'PY'
+import sys, os, re
+import xml.dom.minidom as dom
+root = sys.argv[1]
+rc = 0
+E = chr(27)
+def ok(m):  print('  %s[32mPASS%s[0m  %s' % (E, E, m))
+def no(m):
+    global rc
+    print('  %s[31mFAIL%s[0m  %s' % (E, E, m)); rc = 1
+
+for rel in ['ca_profile.xml', 'templates/vastai.xml']:
+    f = os.path.join(root, rel)
+    if not os.path.exists(f):
+        no(rel + ' is missing'); continue
+    try:
+        dom.parse(f)
+        ok(rel + ' parses as XML')
+    except Exception as e:
+        no(rel + ' is not well formed: ' + str(e))
+
+prof = os.path.join(root, 'ca_profile.xml')
+if os.path.exists(prof):
+    m = re.search(r'<Profile>(.*?)</Profile>', open(prof, encoding='utf-8').read(), re.S)
+    if m and len(m.group(1).strip()) > 40:
+        ok('ca_profile.xml Profile section is non-empty (%d chars)' % len(m.group(1).strip()))
+    else:
+        no('ca_profile.xml Profile is empty or too short, CA will block submission')
+
+tpl = os.path.join(root, 'templates', 'vastai.xml')
+plg = os.path.join(root, 'vastai.plg')
+if os.path.exists(tpl) and os.path.exists(plg):
+    t = open(tpl, encoding='utf-8').read()
+    u = re.search(r'<PluginURL>(.*?)</PluginURL>', t)
+    gh = re.search(r'<!ENTITY github    "(.*?)"', open(plg, encoding='utf-8').read())
+    if u and gh:
+        expect = 'https://raw.githubusercontent.com/' + gh.group(1) + '/main/vastai.plg'
+        if u.group(1).strip() == expect:
+            ok('template PluginURL matches the manifest pluginURL')
+        else:
+            no('template PluginURL is ' + u.group(1).strip() + ', expected ' + expect)
+    else:
+        no('could not compare PluginURL against the manifest')
+sys.exit(rc)
+PY
+
+echo
 echo "== syntax =="
 if command -v php >/dev/null 2>&1; then
   for f in "$SRC"/include/*.php; do
