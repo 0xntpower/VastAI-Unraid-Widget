@@ -9,6 +9,7 @@
   let pollTimer = null;
   let isFetching = false;
   let showHardwareDetails = false;
+  let lastData = null;
 
   function escapeHtml(str) {
     if (str === null || str === undefined) return '';
@@ -50,10 +51,13 @@
         <div class="vast-status-sub">Unreachable</div>
       `;
     } else if (isRented) {
+      // occupancy_code is a per-GPU string (one char per GPU), so test for the
+      // letter rather than comparing the whole string to a single character.
+      const occ = m.occupancy_code || '';
       let occDesc = 'Active';
-      if (m.occupancy_code === 'I') occDesc = 'Interruptible';
-      else if (m.occupancy_code === 'D') occDesc = 'On-Demand';
-      else if (m.occupancy_code === 'R') occDesc = 'Reserved';
+      if (occ.includes('D')) occDesc = 'On-Demand';
+      else if (occ.includes('R')) occDesc = 'Reserved';
+      else if (occ.includes('I')) occDesc = 'Interruptible';
 
       const runningCount = m.running_rentals || 1;
       statusHtml = `
@@ -86,9 +90,15 @@
         <div class="vast-rate-sub">Est. ${formatMoney(m.earn_day)}/day</div>
       `;
     } else if (isListed && isOnline) {
+      // listed_gpu_cost and min_bid_price are PER GPU, while earn_hour in the
+      // branch above is per machine. Scale to machine level so the same column
+      // always means the same thing, and show the per-GPU ask alongside it.
+      const gpus = m.num_gpus || 1;
+      const askMachine = (parseFloat(m.listed_gpu_cost) || 0) * gpus;
+      const minMachine = (parseFloat(m.min_bid_price) || 0) * gpus;
       rateHtml = `
-        <span class="vast-rate-val">${formatRate(m.listed_gpu_cost)}</span>
-        <div class="vast-rate-sub">Min: ${formatRate(m.min_bid_price)}</div>
+        <span class="vast-rate-val">${formatRate(askMachine)}</span>
+        <div class="vast-rate-sub">Min: ${formatRate(minMachine)}${gpus > 1 ? ` &middot; ${formatRate(m.listed_gpu_cost)}/GPU` : ''}</div>
       `;
     } else {
       rateHtml = `
@@ -121,7 +131,7 @@
     let fillClass = 'fill-gray';
     if (isRented) {
       utilPercent = 100;
-      fillClass = (m.occupancy_code === 'I') ? 'fill-amber' : 'fill-green';
+      fillClass = (m.occupancy_code || '').includes('I') ? 'fill-amber' : 'fill-green';
     } else if (isListed) {
       utilPercent = 0;
       fillClass = 'fill-blue';
@@ -185,6 +195,100 @@
     return html;
   }
 
+  function renderTile(data) {
+    const $container = $('#vast_widget_container');
+    const $subtitle = $('#vast_subtitle');
+
+    const sum = data.summary || {};
+    const totalEarn = sum.total_earn_hour || 0;
+    const totalEarnDay = sum.total_earn_day || 0;
+    const balance = sum.account_balance || 0;
+    const rentedCount = sum.rented_machines || 0;
+    const totalCount = sum.total_machines || 0;
+    const machines = data.machines || [];
+
+    // Subtitle. The backend emits stale/cached/cache_age on its degradation
+    // paths, so surface them instead of always claiming ONLINE.
+    const rented = `${rentedCount} of ${totalCount} Rented`;
+    if (data.stale) {
+      $subtitle.html(`<span class="vast-stale">Status: STALE</span> • ${rented}`);
+    } else if (data.cached && data.cache_age > 0) {
+      $subtitle.html(`Status: ONLINE • ${rented} • cached ${data.cache_age}s ago`);
+    } else {
+      $subtitle.html(`Status: ONLINE • ${rented}`);
+    }
+
+
+    // Summary Line (matching PROCESSOR "Total Power 103.74 W | Temperature: 78 °C" / ARRAY "3.98 TB used...")
+    let earnSummary = '';
+    if (totalEarn > 0) {
+      earnSummary = `Total Earnings: <strong class="rate-highlight">+${formatRate(totalEarn)}</strong> (Est. ${formatMoney(totalEarnDay, 2)}/day)`;
+    } else {
+      earnSummary = `Total Earnings: <strong>$0.00/hr</strong> (Idle)`;
+    }
+
+    const balanceText = balance > 0 ? ` | Balance: <strong>${formatMoney(balance, 2)}</strong>` : '';
+    const detailsToggleLabel = showHardwareDetails ? 'Hide details' : 'Show details';
+
+    const summaryLineHtml = `
+      <div class="vast-summary-line">
+        <div>
+          ${earnSummary}${balanceText}
+        </div>
+        <div>
+          <a class="vast-toggle-details" id="vast_toggle_details">${detailsToggleLabel}</a>
+        </div>
+      </div>
+    `;
+
+    // Table
+    if (machines.length === 0) {
+      $container.html(`
+        <div class="vast-msg-box">
+          <i class="fa fa-server" style="font-size: 20px; opacity: 0.5; margin-bottom: 6px; display: block;"></i>
+          No host machines found on this Vast.ai account.
+        </div>
+      `);
+      return;
+    }
+
+    const rowsHtml = machines.map(renderMachineRow).join('');
+
+    const tableHtml = `
+      ${summaryLineHtml}
+      <table class="vast-table">
+        <thead>
+          <tr>
+            <th class="vast-col-device">DEVICE</th>
+            <th class="vast-col-status">STATUS</th>
+            <th class="vast-col-rate">RATE</th>
+            <th class="vast-col-temp">TEMP</th>
+            <th class="vast-col-smart">RELIABILITY</th>
+            <th class="vast-col-util">UTILIZATION</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rowsHtml}
+        </tbody>
+      </table>
+    `;
+
+    $container.html(tableHtml);
+
+    if (data.warning) {
+      $container.prepend(`<div class="vast-msg-box vast-warn">${escapeHtml(data.warning)}</div>`);
+    }
+
+    // Toggling details is pure local state. Re-render from the payload we
+    // already have instead of refetching, which also avoids the in-flight
+    // isFetching guard swallowing the click.
+    $('#vast_toggle_details').off('click').on('click', function (e) {
+      e.preventDefault();
+      showHardwareDetails = !showHardwareDetails;
+      if (lastData) renderTile(lastData);
+    });
+  }
+
   /**
    * Main refresh and render
    */
@@ -236,79 +340,8 @@
           return;
         }
 
-        const sum = data.summary || {};
-        const totalEarn = sum.total_earn_hour || 0;
-        const totalEarnDay = sum.total_earn_day || 0;
-        const balance = sum.account_balance || 0;
-        const rentedCount = sum.rented_machines || 0;
-        const totalCount = sum.total_machines || 0;
-        const machines = data.machines || [];
-
-        // Subtitle: matching "Status: ONLINE" in CACHE/VMDATA
-        $subtitle.html(`Status: ONLINE • ${rentedCount} of ${totalCount} Rented`);
-
-        // Summary Line (matching PROCESSOR "Total Power 103.74 W | Temperature: 78 °C" / ARRAY "3.98 TB used...")
-        let earnSummary = '';
-        if (totalEarn > 0) {
-          earnSummary = `Total Earnings: <strong class="rate-highlight">+${formatRate(totalEarn)}</strong> (Est. ${formatMoney(totalEarnDay, 2)}/day)`;
-        } else {
-          earnSummary = `Total Earnings: <strong>$0.00/hr</strong> (Idle)`;
-        }
-
-        const balanceText = balance > 0 ? ` | Balance: <strong>${formatMoney(balance, 2)}</strong>` : '';
-        const detailsToggleLabel = showHardwareDetails ? 'Hide details' : 'Show details';
-
-        const summaryLineHtml = `
-          <div class="vast-summary-line">
-            <div>
-              ${earnSummary}${balanceText}
-            </div>
-            <div>
-              <a class="vast-toggle-details" id="vast_toggle_details">${detailsToggleLabel}</a>
-            </div>
-          </div>
-        `;
-
-        // Table
-        if (machines.length === 0) {
-          $container.html(`
-            <div class="vast-msg-box">
-              <i class="fa fa-server" style="font-size: 20px; opacity: 0.5; margin-bottom: 6px; display: block;"></i>
-              No host machines found on this Vast.ai account.
-            </div>
-          `);
-          return;
-        }
-
-        const rowsHtml = machines.map(renderMachineRow).join('');
-
-        const tableHtml = `
-          ${summaryLineHtml}
-          <table class="vast-table">
-            <thead>
-              <tr>
-                <th class="vast-col-device">DEVICE</th>
-                <th class="vast-col-status">STATUS</th>
-                <th class="vast-col-rate">RATE</th>
-                <th class="vast-col-temp">TEMP</th>
-                <th class="vast-col-smart">RELIABILITY</th>
-                <th class="vast-col-util">UTILIZATION</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${rowsHtml}
-            </tbody>
-          </table>
-        `;
-
-        $container.html(tableHtml);
-
-        // Bind details toggle link
-        $('#vast_toggle_details').off('click').on('click', function (e) {
-          e.preventDefault();
-          showHardwareDetails = !showHardwareDetails;
-          window.vastai_refresh(false);
-        });
+        lastData = data;
+        renderTile(data);
       },
       error: function (xhr, status, err) {
         if ($icon.length) $icon.removeClass('spinning');

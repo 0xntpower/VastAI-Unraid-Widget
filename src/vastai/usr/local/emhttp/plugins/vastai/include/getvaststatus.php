@@ -30,17 +30,16 @@ if (file_exists($config_file)) {
 }
 
 $api_key      = trim($cfg['API_KEY'] ?? '');
-$interval     = (int) ($cfg['INTERVAL'] ?? 30);
 $cache_ttl    = max(10, (int) ($cfg['CACHE_TTL'] ?? 30));
 $show_balance = (($cfg['SHOW_BALANCE'] ?? '1') !== '0');
 $force_reload = isset($_GET['force']) && ($_GET['force'] === '1' || $_GET['force'] === 'true');
 
+// test_key is accepted on POST only. Unraid validates CSRF on POST via
+// local_prepend.php but the gate is REQUEST_METHOD === 'POST', so a GET branch
+// here would be the only unauthenticated entry point in the plugin.
 $is_test_key = false;
 if (!empty($_POST['test_key'])) {
     $api_key = trim($_POST['test_key']);
-    $is_test_key = true;
-} elseif (!empty($_GET['test_key'])) {
-    $api_key = trim($_GET['test_key']);
     $is_test_key = true;
 }
 
@@ -70,6 +69,24 @@ if (!$force_reload && !$is_test_key && file_exists($cache_file)) {
                 exit;
             }
         }
+    }
+}
+
+// Negative caching. After an upstream failure, do not retry on every poll.
+// Without this an outage makes outbound traffic go UP, because the stale path
+// serves the cache without refreshing its mtime, so every later request retries.
+$backoff_file = $cache_file . '.backoff';
+$backoff_ttl  = 30;
+if (!$force_reload && !$is_test_key
+    && file_exists($backoff_file) && (time() - filemtime($backoff_file)) < $backoff_ttl
+    && file_exists($cache_file)) {
+    $stale_data = @file_get_contents($cache_file);
+    $json = $stale_data ? json_decode($stale_data, true) : null;
+    if (is_array($json)) {
+        $json['stale']   = true;
+        $json['warning'] = 'Vast.ai API unreachable. Showing cached data.';
+        echo json_encode($json, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+        exit;
     }
 }
 
@@ -114,6 +131,12 @@ $user_url     = "https://console.vast.ai/api/v0/users/current/?api_key={$api_key
 // 1. Fetch hosted machines
 $mach_res = vast_api_get($machines_url);
 if ($mach_res['errno'] !== 0 || $mach_res['code'] !== 200) {
+    // Record the failure so the negative-cache backoff above engages and we do
+    // not hammer a down upstream once per poll per open dashboard tab.
+    if (!$is_test_key) {
+        @touch($backoff_file);
+    }
+
     // If request failed, check for stale cache fallback (unless testing a custom key)
     if (!$is_test_key && file_exists($cache_file)) {
         $stale_data = @file_get_contents($cache_file);
@@ -210,7 +233,20 @@ foreach ($raw_machines as $m) {
     $occupancy_raw     = (string) ($m['gpu_occupancy'] ?? '');
     $occupancy_code    = strtoupper(trim($occupancy_raw));
 
-    $is_rented = ($running_rentals > 0) || ($occupancy_code !== '');
+    // gpu_occupancy is a PER-GPU string, one character per GPU, so an 8-GPU host
+    // returns something like "DDxxxxxx". Two consequences:
+    //   1. Never compare it for equality against a single character. That can
+    //      never match a multi-GPU host.
+    //   2. Never treat "non-empty" as rented. An idle host still returns a
+    //      full-length string of placeholder characters.
+    // Testing for the known occupancy letters avoids depending on whatever the
+    // idle placeholder character happens to be.
+    $occ_on_demand     = (strpos($occupancy_code, 'D') !== false);
+    $occ_reserved      = (strpos($occupancy_code, 'R') !== false);
+    $occ_interruptible = (strpos($occupancy_code, 'I') !== false);
+    $occ_any           = $occ_on_demand || $occ_reserved || $occ_interruptible;
+
+    $is_rented = ($running_rentals > 0) || $occ_any;
 
     // Rental status classification
     if (!$is_online) {
@@ -221,15 +257,15 @@ foreach ($raw_machines as $m) {
         $rented_count++;
         $rented_gpus += $num_gpus;
 
-        if ($on_demand_rentals > 0 || $occupancy_code === 'D') {
+        if ($on_demand_rentals > 0 || $occ_on_demand) {
             $status_key   = 'rented_on_demand';
             $status_label = 'Rented (On-Demand)';
             $status_color = 'green';
-        } elseif ($reserved_rentals > 0 || $occupancy_code === 'R') {
+        } elseif ($reserved_rentals > 0 || $occ_reserved) {
             $status_key   = 'rented_reserved';
             $status_label = 'Rented (Reserved)';
             $status_color = 'purple';
-        } elseif ($occupancy_code === 'I' || $running_rentals > 0) {
+        } elseif ($occ_interruptible || $running_rentals > 0) {
             $status_key   = 'rented_interruptible';
             $status_label = 'Rented (Interruptible)';
             $status_color = 'yellow';
@@ -325,10 +361,18 @@ $payload = [
     'machines'  => $processed_machines,
 ];
 
-// Write to cache file atomically
-$tmp_cache = $cache_file . '.' . uniqid('tmp', true);
-if (@file_put_contents($tmp_cache, json_encode($payload, JSON_UNESCAPED_SLASHES))) {
-    @rename($tmp_cache, $cache_file);
+// Write to cache file atomically. Never on a test-key request, or clicking
+// Test Connection would publish that account's fleet to every dashboard tab.
+if (!$is_test_key) {
+    @unlink($backoff_file);
+    $tmp_cache = $cache_file . '.' . uniqid('tmp', true);
+    if (@file_put_contents($tmp_cache, json_encode($payload, JSON_UNESCAPED_SLASHES)) !== false) {
+        if (!@rename($tmp_cache, $cache_file)) {
+            @unlink($tmp_cache);
+        }
+    } else {
+        @unlink($tmp_cache);
+    }
 }
 
 echo json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);

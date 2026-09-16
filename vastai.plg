@@ -1,13 +1,19 @@
-﻿<?xml version='1.0' standalone='yes'?>
+<?xml version='1.0' standalone='yes'?>
 <!DOCTYPE PLUGIN [
   <!ENTITY name      "vastai">
   <!ENTITY author    "0xntpower">
-  <!ENTITY version   "2026.09.13.1">
+  <!ENTITY version   "2026.09.16.2315">
   <!ENTITY github    "0xntpower/VastAI-Unraid-Widget">
   <!ENTITY pluginURL "https://raw.githubusercontent.com/&github;/main/&name;.plg">
   <!ENTITY plugin    "/boot/config/plugins/&name;">
   <!ENTITY emhttp    "/usr/local/emhttp/plugins/&name;">
 ]>
+
+<!--
+  GENERATED FILE - DO NOT EDIT.
+  Every source below is inlined from src/ by build/build.ps1.
+  Edit the files under src/, then rebuild. Edits made here are lost on next build.
+-->
 
 <PLUGIN name="&name;"
         author="&author;"
@@ -18,30 +24,37 @@
         min="6.12.0">
 
 <CHANGES>
-###2026.09.13.1
-- Real-time Vast.ai host machine monitoring widget on Unraid Dashboard.
-- Live active rental status (Interruptible, On-Demand, Reserved, Listed, Unlisted, Offline).
-- Real-time hourly earnings rate ($/hr) and projected daily income ($/day).
-- GPU telemetry, temperature monitoring with color alerts, and reliability scores.
-- Hardware specs overview: CPU, cores, RAM, storage, network bandwidth.
-- Low-overhead local caching proxy to prevent API rate limits.
-- Native theme compatibility across all Unraid themes (Dark/Black, White, Azure, Gray).
+##Vast.ai Monitor
+
+###2026.09.16.2315
+- Fix: plugin updates now actually install. Previously the plugin manager skipped
+  every file that already existed, so an update reported success but kept running
+  the old code until the next reboot.
+- Fix: the plugin icon is now installed. The manifest used a BASE64 element that
+  the plugin manager does not implement, so no image was ever written.
+- Fix: listed machines showed a per-GPU rate in the same column that shows a
+  per-machine rate once rented. An 8-GPU host under-reported its asking price by 8x.
+- Fix: multi-GPU hosts were misclassified. gpu_occupancy is a per-GPU string, so
+  comparing it to a single character never matched, and treating any non-empty
+  value as rented could show an idle host as rented at 0.00/hr.
+- Fix: theme support. 19 of 26 CSS variable references named variables Unraid does
+  not define, so every theme fell back to dark colours.
+- Fix: the tile can be collapsed again, using the native dashboard control.
+- Fix: stale data is now labelled STALE instead of ONLINE, and a warning is shown.
+- Fix: an upstream outage no longer increases outbound API traffic.
+- Fix: Test Connection no longer overwrites the shared dashboard cache.
+- Security: test_key is accepted on POST only. The GET path bypassed CSRF validation.
+- Security: the API key is scrubbed from the config on uninstall.
+- Removed three settings that had no effect: SHOW_TEMP, SHOW_SPECS, SHOW_OFFLINE.
 </CHANGES>
 
-<!-- Pre-install compatibility check -->
-<FILE Run="/usr/bin/php">
-<INLINE><![CDATA[<?php
-  $v = parse_ini_file('/etc/unraid-version')['version'] ?? '0';
-  if (version_compare($v, '6.12.0', '<')) {
-    echo "\n*** Vast.ai Monitor requires Unraid 6.12.0 or newer (found $v). ***\n";
-    exit(1);
-  }
-?>]]></INLINE>
-</FILE>
-
 <!-- Create directories -->
+<!-- rm -rf is required: the plugin manager skips any FILE Name whose target
+     already exists unless a SHA256/MD5 invalidates it, and INLINE files have
+     none. Without this, an update installs nothing until the next reboot. -->
 <FILE Run="/bin/bash">
 <INLINE>
+rm -rf &emhttp;
 mkdir -p &plugin;
 mkdir -p &emhttp;/include
 mkdir -p &emhttp;/javascript
@@ -58,9 +71,6 @@ INTERVAL="30"
 CACHE_TTL="30"
 COLUMN="column1"
 SHOW_BALANCE="1"
-SHOW_TEMP="1"
-SHOW_SPECS="1"
-SHOW_OFFLINE="1"
 ]]></INLINE>
 </FILE>
 
@@ -73,10 +83,10 @@ fi
 </FILE>
 
 <!-- Plugin Icon -->
-<FILE Name="&emhttp;/images/vastai.png">
-<BASE64>
+<FILE Name="&emhttp;/images/vastai.png" Type="base64">
+<INLINE>
 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
-</BASE64>
+</INLINE>
 </FILE>
 
 <!-- Dashboard Page Hook -->
@@ -124,8 +134,6 @@ $interval     = (int) ($cfg['INTERVAL'] ?? 30);
 $cache_ttl    = (int) ($cfg['CACHE_TTL'] ?? 30);
 $column       = (string) ($cfg['COLUMN'] ?? 'column1');
 $show_balance = (($cfg['SHOW_BALANCE'] ?? '1') !== '0');
-$show_temp    = (($cfg['SHOW_TEMP'] ?? '1') !== '0');
-$show_specs   = (($cfg['SHOW_SPECS'] ?? '1') !== '0');
 ?>
 
 <style>
@@ -231,18 +239,6 @@ _(Show Account Balance)_:
     <option value="0" <?=!$show_balance?'selected':''?>>_(No)_</option>
   </select>
 
-_(Show Temperatures)_:
-: <select name="SHOW_TEMP">
-    <option value="1" <?=$show_temp?'selected':''?>>_(Yes)_</option>
-    <option value="0" <?=!$show_temp?'selected':''?>>_(No)_</option>
-  </select>
-
-_(Show Hardware Specs)_:
-: <select name="SHOW_SPECS">
-    <option value="1" <?=$show_specs?'selected':''?>>_(Yes)_</option>
-    <option value="0" <?=!$show_specs?'selected':''?>>_(No)_</option>
-  </select>
-
 &nbsp;
 : <input type="submit" value="_(Apply)_">
 
@@ -345,17 +341,16 @@ if (file_exists($config_file)) {
 }
 
 $api_key      = trim($cfg['API_KEY'] ?? '');
-$interval     = (int) ($cfg['INTERVAL'] ?? 30);
 $cache_ttl    = max(10, (int) ($cfg['CACHE_TTL'] ?? 30));
 $show_balance = (($cfg['SHOW_BALANCE'] ?? '1') !== '0');
 $force_reload = isset($_GET['force']) && ($_GET['force'] === '1' || $_GET['force'] === 'true');
 
+// test_key is accepted on POST only. Unraid validates CSRF on POST via
+// local_prepend.php but the gate is REQUEST_METHOD === 'POST', so a GET branch
+// here would be the only unauthenticated entry point in the plugin.
 $is_test_key = false;
 if (!empty($_POST['test_key'])) {
     $api_key = trim($_POST['test_key']);
-    $is_test_key = true;
-} elseif (!empty($_GET['test_key'])) {
-    $api_key = trim($_GET['test_key']);
     $is_test_key = true;
 }
 
@@ -385,6 +380,24 @@ if (!$force_reload && !$is_test_key && file_exists($cache_file)) {
                 exit;
             }
         }
+    }
+}
+
+// Negative caching. After an upstream failure, do not retry on every poll.
+// Without this an outage makes outbound traffic go UP, because the stale path
+// serves the cache without refreshing its mtime, so every later request retries.
+$backoff_file = $cache_file . '.backoff';
+$backoff_ttl  = 30;
+if (!$force_reload && !$is_test_key
+    && file_exists($backoff_file) && (time() - filemtime($backoff_file)) < $backoff_ttl
+    && file_exists($cache_file)) {
+    $stale_data = @file_get_contents($cache_file);
+    $json = $stale_data ? json_decode($stale_data, true) : null;
+    if (is_array($json)) {
+        $json['stale']   = true;
+        $json['warning'] = 'Vast.ai API unreachable. Showing cached data.';
+        echo json_encode($json, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+        exit;
     }
 }
 
@@ -429,6 +442,12 @@ $user_url     = "https://console.vast.ai/api/v0/users/current/?api_key={$api_key
 // 1. Fetch hosted machines
 $mach_res = vast_api_get($machines_url);
 if ($mach_res['errno'] !== 0 || $mach_res['code'] !== 200) {
+    // Record the failure so the negative-cache backoff above engages and we do
+    // not hammer a down upstream once per poll per open dashboard tab.
+    if (!$is_test_key) {
+        @touch($backoff_file);
+    }
+
     // If request failed, check for stale cache fallback (unless testing a custom key)
     if (!$is_test_key && file_exists($cache_file)) {
         $stale_data = @file_get_contents($cache_file);
@@ -525,7 +544,20 @@ foreach ($raw_machines as $m) {
     $occupancy_raw     = (string) ($m['gpu_occupancy'] ?? '');
     $occupancy_code    = strtoupper(trim($occupancy_raw));
 
-    $is_rented = ($running_rentals > 0) || ($occupancy_code !== '');
+    // gpu_occupancy is a PER-GPU string, one character per GPU, so an 8-GPU host
+    // returns something like "DDxxxxxx". Two consequences:
+    //   1. Never compare it for equality against a single character. That can
+    //      never match a multi-GPU host.
+    //   2. Never treat "non-empty" as rented. An idle host still returns a
+    //      full-length string of placeholder characters.
+    // Testing for the known occupancy letters avoids depending on whatever the
+    // idle placeholder character happens to be.
+    $occ_on_demand     = (strpos($occupancy_code, 'D') !== false);
+    $occ_reserved      = (strpos($occupancy_code, 'R') !== false);
+    $occ_interruptible = (strpos($occupancy_code, 'I') !== false);
+    $occ_any           = $occ_on_demand || $occ_reserved || $occ_interruptible;
+
+    $is_rented = ($running_rentals > 0) || $occ_any;
 
     // Rental status classification
     if (!$is_online) {
@@ -536,15 +568,15 @@ foreach ($raw_machines as $m) {
         $rented_count++;
         $rented_gpus += $num_gpus;
 
-        if ($on_demand_rentals > 0 || $occupancy_code === 'D') {
+        if ($on_demand_rentals > 0 || $occ_on_demand) {
             $status_key   = 'rented_on_demand';
             $status_label = 'Rented (On-Demand)';
             $status_color = 'green';
-        } elseif ($reserved_rentals > 0 || $occupancy_code === 'R') {
+        } elseif ($reserved_rentals > 0 || $occ_reserved) {
             $status_key   = 'rented_reserved';
             $status_label = 'Rented (Reserved)';
             $status_color = 'purple';
-        } elseif ($occupancy_code === 'I' || $running_rentals > 0) {
+        } elseif ($occ_interruptible || $running_rentals > 0) {
             $status_key   = 'rented_interruptible';
             $status_label = 'Rented (Interruptible)';
             $status_color = 'yellow';
@@ -640,10 +672,18 @@ $payload = [
     'machines'  => $processed_machines,
 ];
 
-// Write to cache file atomically
-$tmp_cache = $cache_file . '.' . uniqid('tmp', true);
-if (@file_put_contents($tmp_cache, json_encode($payload, JSON_UNESCAPED_SLASHES))) {
-    @rename($tmp_cache, $cache_file);
+// Write to cache file atomically. Never on a test-key request, or clicking
+// Test Connection would publish that account's fleet to every dashboard tab.
+if (!$is_test_key) {
+    @unlink($backoff_file);
+    $tmp_cache = $cache_file . '.' . uniqid('tmp', true);
+    if (@file_put_contents($tmp_cache, json_encode($payload, JSON_UNESCAPED_SLASHES)) !== false) {
+        if (!@rename($tmp_cache, $cache_file)) {
+            @unlink($tmp_cache);
+        }
+    } else {
+        @unlink($tmp_cache);
+    }
 }
 
 echo json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
@@ -710,11 +750,10 @@ $mytiles['vastai'][$column] = <<<EOT
     <span id="vast_subtitle" class="vast-tile-sub">Connecting…</span>
   </span>
   <span class="tile-header-right">
-    <span class="vast-header-controls">
+    <span class="tile-header-right-controls vast-header-controls">
       <select id="vast_int" class="auto" title="$t_refresh">$intOpts</select>
       <a href="javascript:void(0)" id="vast_btn_refresh" title="Refresh Now"><i id="vast_refresh_icon" class="fa fa-refresh control"></i></a>
       <a href="/Settings/VastAISettings" title="$t_set"><i class="fa fa-fw fa-cog control"></i></a>
-      <i class="fa fa-chevron-up control" title="Toggle Content"></i>
     </span>
   </span>
 </span>
@@ -743,7 +782,7 @@ EOT;
 /* Header & Controls */
 .vast-tile-glyph {
   font-size: 1.4rem;
-  color: var(--text-main, #e2e8f0);
+  color: var(--text-color, #e2e8f0);
   margin-right: 8px;
   vertical-align: middle;
 }
@@ -754,7 +793,7 @@ EOT;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--text-main, #fff);
+  color: var(--text-color, #fff);
   margin: 0;
   vertical-align: middle;
 }
@@ -762,7 +801,7 @@ EOT;
 .vast-tile-sub {
   font-size: 12px;
   font-weight: normal;
-  color: var(--text-muted, #94a3b8);
+  color: var(--alt-text-color, #94a3b8);
   margin-left: 10px;
   vertical-align: middle;
 }
@@ -778,21 +817,21 @@ EOT;
   padding: 1px 4px;
   height: 22px;
   border-radius: 3px;
-  background: var(--control-bg, #282e3d);
-  color: var(--text-main, #e2e8f0);
+  background: var(--mild-background-color, #282e3d);
+  color: var(--text-color, #e2e8f0);
   border: 1px solid var(--border-color, rgba(255,255,255,0.15));
   cursor: pointer;
 }
 
 .vast-header-controls i.control {
   font-size: 13px;
-  color: var(--text-muted, #94a3b8);
+  color: var(--alt-text-color, #94a3b8);
   cursor: pointer;
   transition: color 0.15s ease;
 }
 
 .vast-header-controls i.control:hover {
-  color: var(--text-main, #fff);
+  color: var(--text-color, #fff);
 }
 
 .vast-header-controls i.spinning {
@@ -811,13 +850,13 @@ EOT;
   justify-content: space-between;
   padding: 4px 0 8px 0;
   font-size: 12px;
-  color: var(--text-muted, #94a3b8);
+  color: var(--alt-text-color, #94a3b8);
   border-bottom: 1px solid var(--border-color, rgba(255,255,255,0.08));
   margin-bottom: 6px;
 }
 
 .vast-summary-line strong {
-  color: var(--text-main, #fff);
+  color: var(--text-color, #fff);
 }
 
 .vast-summary-line .rate-highlight {
@@ -843,7 +882,7 @@ table.vast-table {
   border-collapse: collapse;
   font-size: 12px;
   line-height: 1.4;
-  color: var(--text-main, #e2e8f0);
+  color: var(--text-color, #e2e8f0);
 }
 
 table.vast-table thead th {
@@ -851,7 +890,7 @@ table.vast-table thead th {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: var(--text-muted, #8c8c8c);
+  color: var(--alt-text-color, #8c8c8c);
   text-align: left;
   padding: 4px 8px;
   border: none;
@@ -883,7 +922,7 @@ table.vast-table tbody td {
   align-items: center;
   gap: 7px;
   font-weight: 600;
-  color: var(--text-main, #fff);
+  color: var(--text-color, #fff);
 }
 
 .vast-dev-name i.vast-icon-host {
@@ -895,7 +934,7 @@ table.vast-table tbody td {
 
 .vast-dev-sub {
   font-size: 11px;
-  color: var(--text-muted, #8c8c8c);
+  color: var(--alt-text-color, #8c8c8c);
   margin-left: 23px;
   margin-top: 1px;
 }
@@ -934,7 +973,7 @@ table.vast-table tbody td {
 
 .vast-status-sub {
   font-size: 10.5px;
-  color: var(--text-muted, #8c8c8c);
+  color: var(--alt-text-color, #8c8c8c);
   margin-left: 12px;
   margin-top: 1px;
 }
@@ -955,7 +994,7 @@ table.vast-table tbody td {
 
 .vast-rate-sub {
   font-size: 10.5px;
-  color: var(--text-muted, #8c8c8c);
+  color: var(--alt-text-color, #8c8c8c);
 }
 
 /* Column 4: Temp */
@@ -1001,7 +1040,7 @@ table.vast-table tbody td {
   text-align: right;
   margin-right: 6px;
   font-size: 11.5px;
-  color: var(--text-main, #e2e8f0);
+  color: var(--text-color, #e2e8f0);
 }
 
 .vast-util-bar {
@@ -1036,7 +1075,7 @@ tr.vast-details-row td {
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 6px 16px;
   font-size: 11px;
-  color: var(--text-muted, #94a3b8);
+  color: var(--alt-text-color, #94a3b8);
 }
 
 .vast-details-item {
@@ -1051,20 +1090,32 @@ tr.vast-details-row td {
 }
 
 .vast-details-item strong {
-  color: var(--text-main, #e2e8f0);
+  color: var(--text-color, #e2e8f0);
 }
 
 /* Empty & Error Messages */
 .vast-msg-box {
   padding: 16px;
   text-align: center;
-  color: var(--text-muted, #94a3b8);
+  color: var(--alt-text-color, #94a3b8);
   font-size: 12px;
 }
 
 .vast-msg-box a {
   color: #38bdf8;
   text-decoration: underline;
+}
+
+.vast-stale {
+  color: #f59e0b;
+  font-weight: 600;
+}
+
+.vast-warn {
+  color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  border-radius: 4px;
+  margin-bottom: 8px;
 }
 ]]></INLINE>
 </FILE>
@@ -1082,6 +1133,7 @@ tr.vast-details-row td {
   let pollTimer = null;
   let isFetching = false;
   let showHardwareDetails = false;
+  let lastData = null;
 
   function escapeHtml(str) {
     if (str === null || str === undefined) return '';
@@ -1123,10 +1175,13 @@ tr.vast-details-row td {
         <div class="vast-status-sub">Unreachable</div>
       `;
     } else if (isRented) {
+      // occupancy_code is a per-GPU string (one char per GPU), so test for the
+      // letter rather than comparing the whole string to a single character.
+      const occ = m.occupancy_code || '';
       let occDesc = 'Active';
-      if (m.occupancy_code === 'I') occDesc = 'Interruptible';
-      else if (m.occupancy_code === 'D') occDesc = 'On-Demand';
-      else if (m.occupancy_code === 'R') occDesc = 'Reserved';
+      if (occ.includes('D')) occDesc = 'On-Demand';
+      else if (occ.includes('R')) occDesc = 'Reserved';
+      else if (occ.includes('I')) occDesc = 'Interruptible';
 
       const runningCount = m.running_rentals || 1;
       statusHtml = `
@@ -1159,9 +1214,15 @@ tr.vast-details-row td {
         <div class="vast-rate-sub">Est. ${formatMoney(m.earn_day)}/day</div>
       `;
     } else if (isListed && isOnline) {
+      // listed_gpu_cost and min_bid_price are PER GPU, while earn_hour in the
+      // branch above is per machine. Scale to machine level so the same column
+      // always means the same thing, and show the per-GPU ask alongside it.
+      const gpus = m.num_gpus || 1;
+      const askMachine = (parseFloat(m.listed_gpu_cost) || 0) * gpus;
+      const minMachine = (parseFloat(m.min_bid_price) || 0) * gpus;
       rateHtml = `
-        <span class="vast-rate-val">${formatRate(m.listed_gpu_cost)}</span>
-        <div class="vast-rate-sub">Min: ${formatRate(m.min_bid_price)}</div>
+        <span class="vast-rate-val">${formatRate(askMachine)}</span>
+        <div class="vast-rate-sub">Min: ${formatRate(minMachine)}${gpus > 1 ? ` &middot; ${formatRate(m.listed_gpu_cost)}/GPU` : ''}</div>
       `;
     } else {
       rateHtml = `
@@ -1194,7 +1255,7 @@ tr.vast-details-row td {
     let fillClass = 'fill-gray';
     if (isRented) {
       utilPercent = 100;
-      fillClass = (m.occupancy_code === 'I') ? 'fill-amber' : 'fill-green';
+      fillClass = (m.occupancy_code || '').includes('I') ? 'fill-amber' : 'fill-green';
     } else if (isListed) {
       utilPercent = 0;
       fillClass = 'fill-blue';
@@ -1258,6 +1319,100 @@ tr.vast-details-row td {
     return html;
   }
 
+  function renderTile(data) {
+    const $container = $('#vast_widget_container');
+    const $subtitle = $('#vast_subtitle');
+
+    const sum = data.summary || {};
+    const totalEarn = sum.total_earn_hour || 0;
+    const totalEarnDay = sum.total_earn_day || 0;
+    const balance = sum.account_balance || 0;
+    const rentedCount = sum.rented_machines || 0;
+    const totalCount = sum.total_machines || 0;
+    const machines = data.machines || [];
+
+    // Subtitle. The backend emits stale/cached/cache_age on its degradation
+    // paths, so surface them instead of always claiming ONLINE.
+    const rented = `${rentedCount} of ${totalCount} Rented`;
+    if (data.stale) {
+      $subtitle.html(`<span class="vast-stale">Status: STALE</span> • ${rented}`);
+    } else if (data.cached && data.cache_age > 0) {
+      $subtitle.html(`Status: ONLINE • ${rented} • cached ${data.cache_age}s ago`);
+    } else {
+      $subtitle.html(`Status: ONLINE • ${rented}`);
+    }
+
+
+    // Summary Line (matching PROCESSOR "Total Power 103.74 W | Temperature: 78 °C" / ARRAY "3.98 TB used...")
+    let earnSummary = '';
+    if (totalEarn > 0) {
+      earnSummary = `Total Earnings: <strong class="rate-highlight">+${formatRate(totalEarn)}</strong> (Est. ${formatMoney(totalEarnDay, 2)}/day)`;
+    } else {
+      earnSummary = `Total Earnings: <strong>$0.00/hr</strong> (Idle)`;
+    }
+
+    const balanceText = balance > 0 ? ` | Balance: <strong>${formatMoney(balance, 2)}</strong>` : '';
+    const detailsToggleLabel = showHardwareDetails ? 'Hide details' : 'Show details';
+
+    const summaryLineHtml = `
+      <div class="vast-summary-line">
+        <div>
+          ${earnSummary}${balanceText}
+        </div>
+        <div>
+          <a class="vast-toggle-details" id="vast_toggle_details">${detailsToggleLabel}</a>
+        </div>
+      </div>
+    `;
+
+    // Table
+    if (machines.length === 0) {
+      $container.html(`
+        <div class="vast-msg-box">
+          <i class="fa fa-server" style="font-size: 20px; opacity: 0.5; margin-bottom: 6px; display: block;"></i>
+          No host machines found on this Vast.ai account.
+        </div>
+      `);
+      return;
+    }
+
+    const rowsHtml = machines.map(renderMachineRow).join('');
+
+    const tableHtml = `
+      ${summaryLineHtml}
+      <table class="vast-table">
+        <thead>
+          <tr>
+            <th class="vast-col-device">DEVICE</th>
+            <th class="vast-col-status">STATUS</th>
+            <th class="vast-col-rate">RATE</th>
+            <th class="vast-col-temp">TEMP</th>
+            <th class="vast-col-smart">RELIABILITY</th>
+            <th class="vast-col-util">UTILIZATION</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rowsHtml}
+        </tbody>
+      </table>
+    `;
+
+    $container.html(tableHtml);
+
+    if (data.warning) {
+      $container.prepend(`<div class="vast-msg-box vast-warn">${escapeHtml(data.warning)}</div>`);
+    }
+
+    // Toggling details is pure local state. Re-render from the payload we
+    // already have instead of refetching, which also avoids the in-flight
+    // isFetching guard swallowing the click.
+    $('#vast_toggle_details').off('click').on('click', function (e) {
+      e.preventDefault();
+      showHardwareDetails = !showHardwareDetails;
+      if (lastData) renderTile(lastData);
+    });
+  }
+
   /**
    * Main refresh and render
    */
@@ -1309,79 +1464,8 @@ tr.vast-details-row td {
           return;
         }
 
-        const sum = data.summary || {};
-        const totalEarn = sum.total_earn_hour || 0;
-        const totalEarnDay = sum.total_earn_day || 0;
-        const balance = sum.account_balance || 0;
-        const rentedCount = sum.rented_machines || 0;
-        const totalCount = sum.total_machines || 0;
-        const machines = data.machines || [];
-
-        // Subtitle: matching "Status: ONLINE" in CACHE/VMDATA
-        $subtitle.html(`Status: ONLINE • ${rentedCount} of ${totalCount} Rented`);
-
-        // Summary Line (matching PROCESSOR "Total Power 103.74 W | Temperature: 78 °C" / ARRAY "3.98 TB used...")
-        let earnSummary = '';
-        if (totalEarn > 0) {
-          earnSummary = `Total Earnings: <strong class="rate-highlight">+${formatRate(totalEarn)}</strong> (Est. ${formatMoney(totalEarnDay, 2)}/day)`;
-        } else {
-          earnSummary = `Total Earnings: <strong>$0.00/hr</strong> (Idle)`;
-        }
-
-        const balanceText = balance > 0 ? ` | Balance: <strong>${formatMoney(balance, 2)}</strong>` : '';
-        const detailsToggleLabel = showHardwareDetails ? 'Hide details' : 'Show details';
-
-        const summaryLineHtml = `
-          <div class="vast-summary-line">
-            <div>
-              ${earnSummary}${balanceText}
-            </div>
-            <div>
-              <a class="vast-toggle-details" id="vast_toggle_details">${detailsToggleLabel}</a>
-            </div>
-          </div>
-        `;
-
-        // Table
-        if (machines.length === 0) {
-          $container.html(`
-            <div class="vast-msg-box">
-              <i class="fa fa-server" style="font-size: 20px; opacity: 0.5; margin-bottom: 6px; display: block;"></i>
-              No host machines found on this Vast.ai account.
-            </div>
-          `);
-          return;
-        }
-
-        const rowsHtml = machines.map(renderMachineRow).join('');
-
-        const tableHtml = `
-          ${summaryLineHtml}
-          <table class="vast-table">
-            <thead>
-              <tr>
-                <th class="vast-col-device">DEVICE</th>
-                <th class="vast-col-status">STATUS</th>
-                <th class="vast-col-rate">RATE</th>
-                <th class="vast-col-temp">TEMP</th>
-                <th class="vast-col-smart">RELIABILITY</th>
-                <th class="vast-col-util">UTILIZATION</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${rowsHtml}
-            </tbody>
-          </table>
-        `;
-
-        $container.html(tableHtml);
-
-        // Bind details toggle link
-        $('#vast_toggle_details').off('click').on('click', function (e) {
-          e.preventDefault();
-          showHardwareDetails = !showHardwareDetails;
-          window.vastai_refresh(false);
-        });
+        lastData = data;
+        renderTile(data);
       },
       error: function (xhr, status, err) {
         if ($icon.length) $icon.removeClass('spinning');
@@ -1458,6 +1542,10 @@ echo ""
 echo "Removing &name;..."
 rm -rf &emhttp;
 rm -f /tmp/vastai_cache.json*
+if [ -f &plugin;/&name;.cfg ]; then
+  sed -i 's|^API_KEY=.*|API_KEY=""|' &plugin;/&name;.cfg
+  echo "Vast.ai API key scrubbed from &plugin;/&name;.cfg"
+fi
 echo "&name; has been removed."
 </INLINE>
 </FILE>

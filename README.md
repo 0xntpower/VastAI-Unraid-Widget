@@ -1,6 +1,6 @@
 # Vast.ai Dashboard Widget for Unraid
 
-An Unraid 6.12+ and 7.x plugin that adds a dashboard tile for your Vast.ai host machines. It displays rental status, current hourly earnings, temperatures, and hardware specs in a table formatted to match Unraid's native dashboard layout.
+An Unraid 6.12+ and 7.x plugin that adds a dashboard tile for your Vast.ai host machines. It displays rental status, current hourly earnings, GPU temperatures, and hardware specs in a table formatted to match Unraid's native dashboard layout.
 
 ## What it shows
 
@@ -8,8 +8,8 @@ An Unraid 6.12+ and 7.x plugin that adds a dashboard tile for your Vast.ai host 
 - **Earnings and rates**: Live hourly income (`$/hr`) when rented, estimated 24-hour earnings, base listed prices, and minimum bid floors.
 - **Hardware metrics**: GPU model, VRAM, real-time GPU temperature, and host reliability score.
 - **System specs**: An expandable "Show details" toggle displays CPU, RAM, storage, and network bandwidth.
-- **Fleet summary**: Header bar shows total machines, total GPUs, active rentals count, total earnings rate, and account balance.
-- **API caching**: Server-side response caching in `/tmp/vastai_cache.json` (configurable TTL, default 30s) prevents hitting Vast.ai rate limits when multiple dashboard tabs are open.
+- **Fleet summary**: The tile header shows how many machines are rented out of the total. A summary line above the table shows the combined hourly earnings rate, the projected daily figure, and your account balance when it is above zero.
+- **API caching**: Server-side response caching in `/tmp/vastai_cache.json` (configurable TTL, default 30s) keeps multiple open dashboard tabs from each hitting the Vast.ai API. If the API becomes unreachable the tile falls back to the last cached response, labels it `STALE`, and backs off for 30 seconds before retrying rather than retrying on every poll.
 
 ## Installation
 
@@ -40,18 +40,46 @@ Settings are in the Unraid webGUI under **Settings** > **Utilities** > **Vast.ai
 - **Refresh interval**: How often the dashboard tile updates in the background (10s, 30s, 60s, 2m, or off).
 - **Cache TTL**: How long cached API data stays valid before fetching fresh data (15s, 30s, 60s, or 2m).
 - **Dashboard placement**: Column 1 (left), Column 2 (middle), or Column 3 (right).
-- **Display toggles**: Show or hide account balance, temperatures, and hardware specs.
+
+## Where your API key is stored
+
+The key is written to `/boot/config/plugins/vastai/vastai.cfg` on the Unraid flash drive,
+in plaintext, with file mode `600` owned by `root`. That is the standard location for
+Unraid plugin configuration and it survives reboots and plugin upgrades.
+
+Uninstalling the plugin blanks the `API_KEY` line in that file. Your other settings are
+left in place so a reinstall keeps your preferences.
+
+The key is sent to Vast.ai over HTTPS with certificate verification enabled. The plugin
+has no other network destination and no third-party runtime dependencies.
+- **Show account balance**: Show or hide your account balance in the summary line.
 
 ## Building from source
 
-To regenerate `vastai.plg` from the files in `src/`:
+`vastai.plg` is a **generated file**. Every source under `src/` is inlined into it, so edit
+the files in `src/` and rebuild rather than editing `vastai.plg` directly.
 
-**PowerShell (Windows):**
-```powershell
-.\build\build.ps1
-```
+Building needs PowerShell 7 (`pwsh`), which runs on Windows, Linux and macOS:
 
-**Bash (Linux / macOS):**
 ```bash
-./build/build.sh
+pwsh -NoProfile -File build/build.ps1
 ```
+
+There was previously a second Bash generator. It was removed because two hand-maintained
+copies of the same template had already drifted, and the Bash version could exit
+successfully while emitting empty file bodies when a source path was wrong.
+
+The version string lives in the `VERSION` file at the repository root and is read by the
+build. Keep it in `YYYY.MM.DD.HHMM` form: Unraid compares plugin versions with `strcmp`
+rather than a version-aware comparison, so a variable-width string can sort incorrectly and
+make a release invisible to the update check.
+
+Before committing, run the checks:
+
+```bash
+./tests/check.sh
+```
+
+This verifies that `vastai.plg` regenerates identically from source, that no file body is
+empty, that the icon decodes to a real PNG, and that a handful of previously shipped bugs
+have not come back. The same script runs in CI.

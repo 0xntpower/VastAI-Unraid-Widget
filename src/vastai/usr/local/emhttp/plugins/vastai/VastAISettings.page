@@ -32,8 +32,6 @@ $interval     = (int) ($cfg['INTERVAL'] ?? 30);
 $cache_ttl    = (int) ($cfg['CACHE_TTL'] ?? 30);
 $column       = (string) ($cfg['COLUMN'] ?? 'column1');
 $show_balance = (($cfg['SHOW_BALANCE'] ?? '1') !== '0');
-$show_temp    = (($cfg['SHOW_TEMP'] ?? '1') !== '0');
-$show_specs   = (($cfg['SHOW_SPECS'] ?? '1') !== '0');
 ?>
 
 <style>
@@ -137,18 +135,6 @@ _(Show Account Balance)_:
 : <select name="SHOW_BALANCE">
     <option value="1" <?=$show_balance?'selected':''?>>_(Yes)_</option>
     <option value="0" <?=!$show_balance?'selected':''?>>_(No)_</option>
-  </select>
-
-_(Show Temperatures)_:
-: <select name="SHOW_TEMP">
-    <option value="1" <?=$show_temp?'selected':''?>>_(Yes)_</option>
-    <option value="0" <?=!$show_temp?'selected':''?>>_(No)_</option>
-  </select>
-
-_(Show Hardware Specs)_:
-: <select name="SHOW_SPECS">
-    <option value="1" <?=$show_specs?'selected':''?>>_(Yes)_</option>
-    <option value="0" <?=!$show_specs?'selected':''?>>_(No)_</option>
   </select>
 
 &nbsp;

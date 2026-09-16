@@ -1,0 +1,16 @@
+name: build-check
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # php, pwsh, node and python3 are all preinstalled on ubuntu-latest,
+      # so there is deliberately nothing to set up here.
+      - run: ./tests/check.sh

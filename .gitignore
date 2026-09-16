@@ -53,3 +53,7 @@ dist/
 *.tgz
 *.md5
 *.sha256
+
+# Review and tooling artifacts
+.full-review/
+.repowise/

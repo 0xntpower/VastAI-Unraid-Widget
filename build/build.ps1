@@ -12,7 +12,7 @@ $plgFile = Join-Path $root "vastai.plg"
 Write-Host "Building standalone vastai.plg from: $srcDir" -ForegroundColor Cyan
 
 # Read version and metadata
-$version = "2026.09.13.1"
+$version = (Get-Content (Join-Path $root "VERSION") -Raw).Trim()
 $author = "0xntpower"
 $pluginName = "vastai"
 
@@ -54,6 +54,12 @@ $plgContent = @"
   <!ENTITY emhttp    "/usr/local/emhttp/plugins/&name;">
 ]>
 
+<!--
+  GENERATED FILE - DO NOT EDIT.
+  Every source below is inlined from src/ by build/build.ps1.
+  Edit the files under src/, then rebuild. Edits made here are lost on next build.
+-->
+
 <PLUGIN name="&name;"
         author="&author;"
         version="&version;"
@@ -63,30 +69,37 @@ $plgContent = @"
         min="6.12.0">
 
 <CHANGES>
+##Vast.ai Monitor
+
 ###$version
-- Real-time Vast.ai host machine monitoring widget on Unraid Dashboard.
-- Live active rental status (Interruptible, On-Demand, Reserved, Listed, Unlisted, Offline).
-- Real-time hourly earnings rate (`$/hr`) and projected daily income (`$/day`).
-- GPU telemetry, temperature monitoring with color alerts, and reliability scores.
-- Hardware specs overview: CPU, cores, RAM, storage, network bandwidth.
-- Low-overhead local caching proxy to prevent API rate limits.
-- Native theme compatibility across all Unraid themes (Dark/Black, White, Azure, Gray).
+- Fix: plugin updates now actually install. Previously the plugin manager skipped
+  every file that already existed, so an update reported success but kept running
+  the old code until the next reboot.
+- Fix: the plugin icon is now installed. The manifest used a BASE64 element that
+  the plugin manager does not implement, so no image was ever written.
+- Fix: listed machines showed a per-GPU rate in the same column that shows a
+  per-machine rate once rented. An 8-GPU host under-reported its asking price by 8x.
+- Fix: multi-GPU hosts were misclassified. gpu_occupancy is a per-GPU string, so
+  comparing it to a single character never matched, and treating any non-empty
+  value as rented could show an idle host as rented at 0.00/hr.
+- Fix: theme support. 19 of 26 CSS variable references named variables Unraid does
+  not define, so every theme fell back to dark colours.
+- Fix: the tile can be collapsed again, using the native dashboard control.
+- Fix: stale data is now labelled STALE instead of ONLINE, and a warning is shown.
+- Fix: an upstream outage no longer increases outbound API traffic.
+- Fix: Test Connection no longer overwrites the shared dashboard cache.
+- Security: test_key is accepted on POST only. The GET path bypassed CSRF validation.
+- Security: the API key is scrubbed from the config on uninstall.
+- Removed three settings that had no effect: SHOW_TEMP, SHOW_SPECS, SHOW_OFFLINE.
 </CHANGES>
 
-<!-- Pre-install compatibility check -->
-<FILE Run="/usr/bin/php">
-<INLINE><![CDATA[<?php
-  `$v = parse_ini_file('/etc/unraid-version')['version'] ?? '0';
-  if (version_compare(`$v, '6.12.0', '<')) {
-    echo "\n*** Vast.ai Monitor requires Unraid 6.12.0 or newer (found `$v). ***\n";
-    exit(1);
-  }
-?>]]></INLINE>
-</FILE>
-
 <!-- Create directories -->
+<!-- rm -rf is required: the plugin manager skips any FILE Name whose target
+     already exists unless a SHA256/MD5 invalidates it, and INLINE files have
+     none. Without this, an update installs nothing until the next reboot. -->
 <FILE Run="/bin/bash">
 <INLINE>
+rm -rf &emhttp;
 mkdir -p &plugin;
 mkdir -p &emhttp;/include
 mkdir -p &emhttp;/javascript
@@ -109,10 +122,10 @@ fi
 </FILE>
 
 <!-- Plugin Icon -->
-<FILE Name="&emhttp;/images/vastai.png">
-<BASE64>
+<FILE Name="&emhttp;/images/vastai.png" Type="base64">
+<INLINE>
 $iconB64
-</BASE64>
+</INLINE>
 </FILE>
 
 <!-- Dashboard Page Hook -->
@@ -166,6 +179,10 @@ echo ""
 echo "Removing &name;..."
 rm -rf &emhttp;
 rm -f /tmp/vastai_cache.json*
+if [ -f &plugin;/&name;.cfg ]; then
+  sed -i 's|^API_KEY=.*|API_KEY=""|' &plugin;/&name;.cfg
+  echo "Vast.ai API key scrubbed from &plugin;/&name;.cfg"
+fi
 echo "&name; has been removed."
 </INLINE>
 </FILE>
@@ -173,5 +190,6 @@ echo "&name; has been removed."
 </PLUGIN>
 "@
 
-[System.IO.File]::WriteAllText($plgFile, $plgContent.Trim(), [System.Text.Encoding]::UTF8)
+$utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+[System.IO.File]::WriteAllText($plgFile, $plgContent.Trim(), $utf8NoBom)
 Write-Host "Successfully generated standalone plugin installer: $plgFile" -ForegroundColor Green

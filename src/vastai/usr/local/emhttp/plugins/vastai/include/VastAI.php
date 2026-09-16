@@ -56,11 +56,10 @@ $mytiles['vastai'][$column] = <<<EOT
     <span id="vast_subtitle" class="vast-tile-sub">Connecting…</span>
   </span>
   <span class="tile-header-right">
-    <span class="vast-header-controls">
+    <span class="tile-header-right-controls vast-header-controls">
       <select id="vast_int" class="auto" title="$t_refresh">$intOpts</select>
       <a href="javascript:void(0)" id="vast_btn_refresh" title="Refresh Now"><i id="vast_refresh_icon" class="fa fa-refresh control"></i></a>
       <a href="/Settings/VastAISettings" title="$t_set"><i class="fa fa-fw fa-cog control"></i></a>
-      <i class="fa fa-chevron-up control" title="Toggle Content"></i>
     </span>
   </span>
 </span>
