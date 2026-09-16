@@ -33,6 +33,7 @@ $vastAiPhp  = Get-FileContentSafe "include\VastAI.php"
 $statusPhp  = Get-FileContentSafe "include\getvaststatus.php"
 $vastJs     = Get-FileContentSafe "javascript\vastai.js"
 $vastCss    = Get-FileContentSafe "styles\vastai.css"
+$pluginDesc = Get-FileContentSafe "README.md"
 
 # Base64 encode images
 $iconPath = Join-Path $srcDir "images\vastai.png"
@@ -40,6 +41,15 @@ $iconB64 = ""
 if (Test-Path $iconPath) {
     $iconBytes = [System.IO.File]::ReadAllBytes($iconPath)
     $iconB64 = [Convert]::ToBase64String($iconBytes)
+}
+
+# Unraid resolves a .page Icon= value to /plugins/<name>/icons/<file>,
+# which is a different directory from the images/ one the banner uses.
+$navIconPath = Join-Path $srcDir ("icons" + [IO.Path]::DirectorySeparatorChar + "vastai.png")
+$navIconB64 = ""
+if (Test-Path $navIconPath) {
+    $navIconBytes = [System.IO.File]::ReadAllBytes($navIconPath)
+    $navIconB64 = [Convert]::ToBase64String($navIconBytes)
 }
 
 $plgContent = @"
@@ -65,13 +75,21 @@ $plgContent = @"
         version="&version;"
         pluginURL="&pluginURL;"
         launch="Settings/VastAISettings"
-        icon="cubes"
+        icon="vastai.png"
         min="6.12.0">
 
 <CHANGES>
 ##Vast.ai Monitor
 
 ###$version
+- The plugin now has an icon everywhere Unraid shows one. The Plugins page entry,
+  the Settings and Utilities nav entry and the dashboard tile all use the Vast.ai
+  mark instead of a generic glyph or a missing image.
+- Icons are now transparent PNGs rather than opaque dark squares, so they sit
+  correctly on the light Unraid themes as well as the dark ones.
+- The Plugins page now shows a description instead of just the plugin name.
+
+###2026.09.16.2315
 - Fix: plugin updates now actually install. Previously the plugin manager skipped
   every file that already existed, so an update reported success but kept running
   the old code until the next reboot.
@@ -105,6 +123,7 @@ mkdir -p &emhttp;/include
 mkdir -p &emhttp;/javascript
 mkdir -p &emhttp;/styles
 mkdir -p &emhttp;/images
+mkdir -p &emhttp;/icons
 </INLINE>
 </FILE>
 
@@ -126,6 +145,19 @@ fi
 <INLINE>
 $iconB64
 </INLINE>
+</FILE>
+
+<!-- Nav icon. Unraid resolves a .page Icon= value to /plugins/<name>/icons/ -->
+<FILE Name="&emhttp;/icons/vastai.png" Type="base64">
+<INLINE>
+$navIconB64
+</INLINE>
+</FILE>
+
+<!-- Description shown on the Plugins page. ShowPlugins.php renders
+     plugins/<name>/README.md as Markdown, falling back to the bold name. -->
+<FILE Name="&emhttp;/README.md">
+<INLINE><![CDATA[$pluginDesc]]></INLINE>
 </FILE>
 
 <!-- Dashboard Page Hook -->

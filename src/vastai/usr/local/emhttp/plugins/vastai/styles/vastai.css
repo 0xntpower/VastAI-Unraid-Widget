@@ -6,10 +6,12 @@
 
 /* Header & Controls */
 .vast-tile-glyph {
-  font-size: 1.4rem;
-  color: var(--text-color, #e2e8f0);
+  width: 20px;
+  height: 20px;
   margin-right: 8px;
   vertical-align: middle;
+  border-radius: 4px;
+  flex: 0 0 auto;
 }
 
 .vast-tile-title {

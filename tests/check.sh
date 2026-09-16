@@ -21,6 +21,7 @@ bad()  { printf '  \033[31mFAIL\033[0m  %s\n' "$1"; fail=1; }
 echo "== source files present =="
 REQUIRED=(
   default.cfg
+  README.md
   VastAIDashboard.page
   VastAISettings.page
   include/VastAI.php
@@ -28,6 +29,7 @@ REQUIRED=(
   javascript/vastai.js
   styles/vastai.css
   images/vastai.png
+  icons/vastai.png
 )
 for f in "${REQUIRED[@]}"; do
   if [ -s "$SRC/$f" ]; then pass "$f"; else bad "$f missing or empty"; fi
@@ -45,7 +47,6 @@ if printf '%s' "$VER" | grep -qE '^[0-9]{4}\.[0-9]{2}\.[0-9]{2}\.[0-9]{4}$'; the
 else
   bad "VERSION is '$VER', must be fixed-width YYYY.MM.DD.HHMM with zero-padded HHMM"
 fi
-# the manifest must carry the same string the VERSION file declares
 if grep -q "<!ENTITY version   \"$VER\">" "$PLG"; then
   pass "manifest version entity matches VERSION"
 else
@@ -64,7 +65,6 @@ if command -v pwsh >/dev/null 2>&1; then
     pass "vastai.plg matches build/build.ps1 output"
   else
     bad "vastai.plg is stale. Run build/build.ps1 and commit the result"
-    diff <(head -50 "$tmp/committed.plg") <(head -50 "$PLG") | head -20 || true
   fi
   cp "$tmp/committed.plg" "$PLG"
   rm -rf "$tmp"
@@ -82,8 +82,8 @@ n="$(grep -c '<!\[CDATA\[\]\]>' "$PLG" || true)"
 # invalidates it. INLINE files have no checksum, so without rm -rf an update
 # installs nothing until the next reboot.
 grep -q 'rm -rf &emhttp;' "$PLG" \
-  && pass "install clears &emhttp; so updates actually apply" \
-  || bad "missing 'rm -rf &emhttp;' - updates will silently install nothing"
+  && pass "install clears the plugin directory so updates actually apply" \
+  || bad "missing 'rm -rf' of the install directory, updates will install nothing"
 
 # <BASE64> is not a .plg element. Base64 content is Type="base64" on the FILE.
 if grep -q '<BASE64>' "$PLG"; then
@@ -91,14 +91,11 @@ if grep -q '<BASE64>' "$PLG"; then
 else
   pass "no unsupported <BASE64> element"
 fi
-grep -q 'Type="base64"' "$PLG" \
-  && pass "icon declared as Type=\"base64\"" \
-  || bad "icon FILE is not declared Type=\"base64\""
 
-# A ]]> sequence inside any source would terminate its CDATA block early and
-# let arbitrary XML into a manifest whose FILE Run blocks execute as root.
+# A CDATA terminator inside any source would break out of its block and let
+# arbitrary XML into a manifest whose FILE Run blocks execute as root.
 if grep -rq ']]>' "$SRC" 2>/dev/null; then
-  bad "a source file contains ]]> which would break out of its CDATA block"
+  bad "a source file contains a CDATA terminator, which would break out of its block"
 else
   pass "no CDATA-terminating sequence in sources"
 fi
@@ -112,9 +109,10 @@ echo "== every source is shipped and non-empty in the manifest =="
 python3 - "$PLG" <<'PY'
 import sys, re
 x = open(sys.argv[1], encoding='utf-8').read()
-want = ['default.cfg','VastAIDashboard.page','VastAISettings.page',
-        'include/getvaststatus.php','include/VastAI.php',
-        'javascript/vastai.js','styles/vastai.css','images/vastai.png']
+want = ['default.cfg', 'README.md', 'VastAIDashboard.page', 'VastAISettings.page',
+        'include/getvaststatus.php', 'include/VastAI.php',
+        'javascript/vastai.js', 'styles/vastai.css',
+        'images/vastai.png', 'icons/vastai.png']
 rc = 0
 for w in want:
     m = re.search(r'<FILE Name="&emhttp;/%s"[^>]*>\s*<INLINE>(.*?)</INLINE>' % re.escape(w), x, re.S)
@@ -123,23 +121,56 @@ for w in want:
     elif len(m.group(1).strip()) < 20:
         print('  \033[31mFAIL\033[0m  %s inlined but effectively empty' % w); rc = 1
     else:
-        print('  \033[32mPASS\033[0m  %s (%d bytes inlined)' % (w, len(m.group(1).strip())))
+        print('  \033[32mPASS\033[0m  %-26s %7d bytes inlined' % (w, len(m.group(1).strip())))
 sys.exit(rc)
 PY
 
 echo
-echo "== the icon is a real PNG =="
+echo "== icons decode to real PNGs =="
+# Both are base64 payloads built from PowerShell variables. An undefined
+# variable interpolates as empty and the FILE ships zero bytes with no error,
+# so decode them rather than trusting that the element exists.
 python3 - "$PLG" <<'PY'
 import sys, re, base64
 x = open(sys.argv[1], encoding='utf-8').read()
-m = re.search(r'<FILE Name="&emhttp;/images/vastai\.png" Type="base64">\s*<INLINE>(.*?)</INLINE>', x, re.S)
-if not m:
-    print('  \033[31mFAIL\033[0m  icon FILE not found'); sys.exit(1)
-raw = base64.b64decode(m.group(1).strip())
-if raw[:8] == b'\x89PNG\r\n\x1a\n':
-    print('  \033[32mPASS\033[0m  icon decodes to a %d byte PNG' % len(raw))
+rc = 0
+for path, purpose in [('images/vastai.png', 'Plugins page + settings banner'),
+                      ('icons/vastai.png',  'Settings > Utilities nav entry')]:
+    m = re.search(r'<FILE Name="&emhttp;/%s" Type="base64">\s*<INLINE>(.*?)</INLINE>'
+                  % re.escape(path), x, re.S)
+    if not m or not m.group(1).strip():
+        print('  \033[31mFAIL\033[0m  %s is missing or empty' % path); rc = 1; continue
+    raw = base64.b64decode(m.group(1).strip())
+    if raw[:8] == b'\x89PNG\r\n\x1a\n':
+        print('  \033[32mPASS\033[0m  %-18s %6d bytes  (%s)' % (path, len(raw), purpose))
+    else:
+        print('  \033[31mFAIL\033[0m  %s does not decode to a PNG' % path); rc = 1
+sys.exit(rc)
+PY
+
+echo
+echo "== icon and description wiring =="
+# Unraid resolves these through three different code paths and directories,
+# so each is asserted separately.
+grep -q 'icon="vastai.png"' "$PLG" \
+  && pass "Plugins page entry uses the brand icon (resolved via images/)" \
+  || bad "PLUGIN icon attribute is not vastai.png"
+grep -q 'Icon="vastai.png"' "$PLG" \
+  && pass "Settings nav entry declares Icon=vastai.png (resolved via icons/)" \
+  || bad "settings page Icon attribute is not vastai.png"
+grep -q 'mkdir -p &emhttp;/icons' "$PLG" \
+  && pass "install creates the icons directory" \
+  || bad "icons directory is never created, the nav icon will 404"
+python3 - "$PLG" <<'PY'
+import sys, re
+x = open(sys.argv[1], encoding='utf-8').read()
+m = re.search(r'<FILE Name="&emhttp;/README\.md">\s*<INLINE><!\[CDATA\[(.*?)\]\]></INLINE>', x, re.S)
+body = m.group(1).strip() if m else ''
+if len(body) > 10:
+    print('  \033[32mPASS\033[0m  Plugins page description ships (%d chars)' % len(body))
 else:
-    print('  \033[31mFAIL\033[0m  icon does not decode to a PNG'); sys.exit(1)
+    print('  \033[31mFAIL\033[0m  README.md missing or empty, description falls back to the bare name')
+    sys.exit(1)
 PY
 
 echo

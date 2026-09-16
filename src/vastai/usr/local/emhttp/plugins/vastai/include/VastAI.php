@@ -51,7 +51,7 @@ $mytiles['vastai'][$column] = <<<EOT
 <style>$css</style>
 <span class="tile-header">
   <span class="tile-header-left">
-    <i class="fa fa-cubes vast-tile-glyph"></i>
+    <img src="/plugins/vastai/icons/vastai.png" class="vast-tile-glyph" alt="">
     <span class="vast-tile-title">$t_title</span>
     <span id="vast_subtitle" class="vast-tile-sub">Connecting…</span>
   </span>

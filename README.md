@@ -79,6 +79,25 @@ string order match chronological order. Drop a leading zero and a later release 
 below an earlier one and become permanently invisible to the update check. `tests/check.sh`
 enforces the format.
 
+### Icons
+
+The plugin ships the same mark to two directories, because Unraid resolves them
+through different code paths. `images/vastai.png` backs the Plugins page entry and
+the settings banner, and `icons/vastai.png` backs the Settings and Utilities nav
+entry. Both are generated from `build/assets/vastai-master.png`:
+
+```bash
+python3 build/make-icons.py
+```
+
+That crops the master to the badge and cuts the corners to transparency, because
+two of the four Unraid themes are light and an opaque dark square looks wrong on
+them. Needs Pillow, and only needs rerunning when the master artwork changes.
+
+The short description shown on the Unraid Plugins page comes from
+`src/vastai/usr/local/emhttp/plugins/vastai/README.md`, which is a different file
+from this one and is rendered by Unraid as Markdown.
+
 Before committing, run the checks:
 
 ```bash
