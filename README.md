@@ -70,9 +70,14 @@ copies of the same template had already drifted, and the Bash version could exit
 successfully while emitting empty file bodies when a source path was wrong.
 
 The version string lives in the `VERSION` file at the repository root and is read by the
-build. Keep it in `YYYY.MM.DD.HHMM` form: Unraid compares plugin versions with `strcmp`
-rather than a version-aware comparison, so a variable-width string can sort incorrectly and
-make a release invisible to the update check.
+build. It must be **fixed width**, `YYYY.MM.DD.HHMM`, with `HHMM` zero-padded to four
+digits. Write `2026.09.17.0945`, never `2026.09.17.945`.
+
+Unraid compares plugin versions with `strcmp`, not a version-aware comparison, so string
+order is the only thing that decides whether an update is offered. Fixed-width fields make
+string order match chronological order. Drop a leading zero and a later release can sort
+below an earlier one and become permanently invisible to the update check. `tests/check.sh`
+enforces the format.
 
 Before committing, run the checks:
 

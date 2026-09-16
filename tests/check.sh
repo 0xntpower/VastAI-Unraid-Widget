@@ -34,6 +34,25 @@ for f in "${REQUIRED[@]}"; do
 done
 
 echo
+echo "== version string =="
+# Unraid compares plugin versions with strcmp, not version_compare. That is only
+# monotonic if every field is fixed width, so HHMM must be zero-padded to four
+# digits. Mixing 0945 and 945 makes a later release sort older and become
+# permanently invisible to the update check.
+VER="$(tr -d '[:space:]' < "$ROOT/VERSION")"
+if printf '%s' "$VER" | grep -qE '^[0-9]{4}\.[0-9]{2}\.[0-9]{2}\.[0-9]{4}$'; then
+  pass "VERSION is $VER (fixed-width YYYY.MM.DD.HHMM)"
+else
+  bad "VERSION is '$VER', must be fixed-width YYYY.MM.DD.HHMM with zero-padded HHMM"
+fi
+# the manifest must carry the same string the VERSION file declares
+if grep -q "<!ENTITY version   \"$VER\">" "$PLG"; then
+  pass "manifest version entity matches VERSION"
+else
+  bad "manifest version entity does not match VERSION, rebuild needed"
+fi
+
+echo
 echo "== manifest is reproducible from source =="
 # The .plg is a generated artifact that users install directly. If it does not
 # regenerate identically, the committed file does not match the sources.
