@@ -2,6 +2,7 @@
 <Plugin>
   <Name>Vast.ai Monitor</Name>
   <PluginURL>https://raw.githubusercontent.com/0xntpower/VastAI-Unraid-Widget/main/vastai.plg</PluginURL>
+  <PluginAuthor>0xntpower</PluginAuthor>
   <Support>https://forums.unraid.net/topic/200608-plugin-vastai-dashboard-tile/</Support>
   <Project>https://github.com/0xntpower/VastAI-Unraid-Widget</Project>
   <Icon>https://raw.githubusercontent.com/0xntpower/VastAI-Unraid-Widget/main/src/vastai/usr/local/emhttp/plugins/vastai/images/vastai.png</Icon>
