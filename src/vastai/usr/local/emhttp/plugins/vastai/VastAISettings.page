@@ -189,15 +189,15 @@ function testVastConnection() {
         );
       } else {
         box.addClass('vast-test-error').html(
-          '<strong><i class="fa fa-times-circle"></i> Connection Failed:</strong> ' + (data.error || 'Unknown error occurred.')
-        );
+          '<strong><i class="fa fa-times-circle"></i> Connection Failed:</strong> '
+        ).append(document.createTextNode(data.error || 'Unknown error occurred.'));
       }
     },
     error: function(xhr, status, err) {
       btn.prop('disabled', false).text('Test Connection');
       box.addClass('vast-test-error').html(
-        '<strong><i class="fa fa-times-circle"></i> Request Failed:</strong> ' + status + ' - ' + err
-      );
+        '<strong><i class="fa fa-times-circle"></i> Request Failed:</strong> '
+      ).append(document.createTextNode(status + ' - ' + err));
     }
   });
 }
