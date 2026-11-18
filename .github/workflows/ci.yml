@@ -6,11 +6,17 @@ on:
   pull_request:
     branches: [main]
 
+# The job only reads the tree. Do not hand it a token that can write.
+permissions:
+  contents: read
+
 jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       # php, pwsh, node and python3 are all preinstalled on ubuntu-latest,
       # so there is deliberately nothing to set up here.
       - run: ./tests/check.sh

@@ -12,7 +12,6 @@ header('Cache-Control: no-cache, no-store, must-revalidate');
 $plugin_dir = '/usr/local/emhttp/plugins/vastai';
 $config_file = '/boot/config/plugins/vastai/vastai.cfg';
 $default_cfg = "$plugin_dir/default.cfg";
-$cache_file = '/tmp/vastai_cache.json';
 
 // Load configuration
 $cfg = [];
@@ -54,6 +53,10 @@ if (empty($api_key)) {
     exit;
 }
 
+// One cache per key. Changing the key in Settings must never show the previous
+// account's fleet, not even as a stale fallback while the new key is failing.
+$cache_file = '/tmp/vastai_cache_' . substr(hash('sha256', $api_key), 0, 16) . '.json';
+
 // Check cache if not forcing refresh and not testing an ad-hoc key
 if (!$force_reload && !$is_test_key && file_exists($cache_file)) {
     $mtime = filemtime($cache_file);
@@ -93,20 +96,27 @@ if (!$force_reload && !$is_test_key
 /**
  * Helper to execute HTTP GET via cURL
  */
-function vast_api_get(string $url, int $timeout = 9): array {
+function vast_api_get(string $url, string $api_key, int $timeout = 9): array {
     $ch = curl_init();
     curl_setopt_array($ch, [
-        CURLOPT_URL            => $url,
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_FOLLOWLOCATION => true,
-        CURLOPT_MAXREDIRS      => 5,
-        CURLOPT_CONNECTTIMEOUT => 5,
-        CURLOPT_TIMEOUT        => $timeout,
-        CURLOPT_SSL_VERIFYPEER => true,
-        CURLOPT_SSL_VERIFYHOST => 2,
-        CURLOPT_USERAGENT      => 'VastAI-Unraid-Widget/1.0',
-        CURLOPT_HTTPHEADER     => [
+        CURLOPT_URL             => $url,
+        CURLOPT_RETURNTRANSFER  => true,
+        CURLOPT_FOLLOWLOCATION  => true,
+        CURLOPT_MAXREDIRS       => 5,
+        // A redirect may never downgrade to plain HTTP with the key attached.
+        CURLOPT_PROTOCOLS       => CURLPROTO_HTTPS,
+        CURLOPT_REDIR_PROTOCOLS => CURLPROTO_HTTPS,
+        CURLOPT_CONNECTTIMEOUT  => 5,
+        CURLOPT_TIMEOUT         => $timeout,
+        CURLOPT_SSL_VERIFYPEER  => true,
+        CURLOPT_SSL_VERIFYHOST  => 2,
+        CURLOPT_ENCODING        => '', // accept gzip, the API serves it
+        CURLOPT_USERAGENT       => 'VastAI-Unraid-Widget/1.0',
+        CURLOPT_HTTPHEADER      => [
             'Accept: application/json',
+            // A header, not ?api_key=, so the key never appears in a URL, and
+            // libcurl drops it if a redirect leaves the original host.
+            'Authorization: Bearer ' . $api_key,
         ],
     ]);
 
@@ -124,79 +134,76 @@ function vast_api_get(string $url, int $timeout = 9): array {
     ];
 }
 
-$api_key_enc = urlencode($api_key);
-$machines_url = "https://console.vast.ai/api/v0/machines/?owner=me&api_key={$api_key_enc}";
-$user_url     = "https://console.vast.ai/api/v0/users/current/?api_key={$api_key_enc}";
+$machines_url = 'https://console.vast.ai/api/v0/machines/?owner=me';
+$user_url     = 'https://console.vast.ai/api/v0/users/current/';
 
 // 1. Fetch hosted machines
-$mach_res = vast_api_get($machines_url);
-if ($mach_res['errno'] !== 0 || $mach_res['code'] !== 200) {
-    // Record the failure so the negative-cache backoff above engages and we do
-    // not hammer a down upstream once per poll per open dashboard tab.
-    if (!$is_test_key) {
-        @touch($backoff_file);
+$mach_res = vast_api_get($machines_url, $api_key);
+$raw_machines_data = json_decode((string) $mach_res['response'], true);
+// A 200 whose body is not the expected JSON (a CDN error page, a captive
+// portal) is a failure too. Treating it as success cached an empty fleet over
+// the last good response.
+$mach_ok = $mach_res['errno'] === 0 && $mach_res['code'] === 200
+    && is_array($raw_machines_data) && is_array($raw_machines_data['machines'] ?? null);
+
+if (!$mach_ok) {
+    $code        = $mach_res['code'];
+    // Vast.ai answers a missing key with 403 and an invalid one with 404
+    // "Invalid user key", not 401.
+    $auth_failed = in_array($code, [401, 403, 404], true);
+    $api_msg     = is_array($raw_machines_data)
+        ? (string) ($raw_machines_data['msg'] ?? $raw_machines_data['error'] ?? '') : '';
+
+    if ($mach_res['error'] !== '') {
+        $errMsg = $mach_res['error'];
+    } elseif ($api_msg !== '') {
+        $errMsg = "$api_msg (HTTP $code)";
+    } elseif ($auth_failed) {
+        $errMsg = "Invalid API Key or unauthorized (HTTP $code). Please verify your key from console.vast.ai/manage-keys.";
+    } elseif ($code === 200) {
+        $errMsg = 'Unexpected response from the Vast.ai API (HTTP 200, not machine data)';
+    } else {
+        $errMsg = "HTTP $code";
     }
 
-    // If request failed, check for stale cache fallback (unless testing a custom key)
-    if (!$is_test_key && file_exists($cache_file)) {
-        $stale_data = @file_get_contents($cache_file);
-        if ($stale_data) {
-            $json = json_decode($stale_data, true);
+    if (!$is_test_key) {
+        // Record the failure so the negative-cache backoff above engages and we
+        // do not hammer a down upstream once per poll per open dashboard tab.
+        @touch($backoff_file);
+
+        if ($auth_failed) {
+            // A rejected key is not an outage. Serving its cache as STALE would
+            // hide the real problem for as long as the key stays revoked.
+            @unlink($cache_file);
+        } elseif (file_exists($cache_file)) {
+            $stale_data = @file_get_contents($cache_file);
+            $json = $stale_data ? json_decode($stale_data, true) : null;
             if (is_array($json)) {
-                $json['stale'] = true;
-                $json['warning'] = 'Vast.ai API connection error (' . ($mach_res['error'] ?: "HTTP {$mach_res['code']}") . '). Showing cached data.';
+                $json['stale']   = true;
+                $json['warning'] = "Vast.ai API error ($errMsg). Showing cached data.";
                 echo json_encode($json, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
                 exit;
             }
         }
     }
 
-    $errMsg = $mach_res['error'] ?: "HTTP {$mach_res['code']}";
-    if ($mach_res['code'] === 401 || $mach_res['code'] === 403) {
-        $resp_json = @json_decode($mach_res['response'] ?? '', true);
-        if (is_array($resp_json) && !empty($resp_json['msg'])) {
-            $errMsg = $resp_json['msg'] . " (HTTP {$mach_res['code']})";
-        } else {
-            $errMsg = "Invalid API Key or unauthorized (HTTP {$mach_res['code']}). Please verify your key from console.vast.ai/manage-keys.";
-        }
-    }
     echo json_encode([
         'success'   => false,
         'error'     => $errMsg,
-        'http_code' => $mach_res['code'],
+        'http_code' => $code,
         'timestamp' => time(),
     ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
     exit;
 }
+$raw_machines = $raw_machines_data['machines'];
 
-$raw_machines_data = json_decode($mach_res['response'], true);
-if (is_array($raw_machines_data) && isset($raw_machines_data['success']) && $raw_machines_data['success'] === false) {
-    $errMsg = $raw_machines_data['msg'] ?? $raw_machines_data['error'] ?? 'API error';
-    echo json_encode([
-        'success'   => false,
-        'error'     => $errMsg,
-        'http_code' => $mach_res['code'],
-        'timestamp' => time(),
-    ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
-    exit;
-}
-$raw_machines = $raw_machines_data['machines'] ?? [];
-
-// 2. Fetch User Account Balance (optional)
-$account_info = [
-    'balance' => 0.0,
-    'credit'  => 0.0,
-    'email'   => '',
-];
+// 2. Fetch account balance (optional). A failure here only hides the balance.
+$balance = 0.0;
 if ($show_balance) {
-    $user_res = vast_api_get($user_url, 5);
-    if ($user_res['code'] === 200 && !empty($user_res['response'])) {
-        $u = json_decode($user_res['response'], true);
-        if (is_array($u)) {
-            $account_info['balance'] = (float) ($u['balance'] ?? 0.0);
-            $account_info['credit']  = (float) ($u['credit'] ?? 0.0);
-            $account_info['email']   = (string) ($u['email'] ?? '');
-        }
+    $user_res = vast_api_get($user_url, $api_key, 5);
+    $u = $user_res['code'] === 200 ? json_decode((string) $user_res['response'], true) : null;
+    if (is_array($u)) {
+        $balance = (float) ($u['balance'] ?? 0.0);
     }
 }
 
@@ -205,14 +212,14 @@ $processed_machines = [];
 $total_earn_hour = 0.0;
 $total_earn_day  = 0.0;
 $rented_count    = 0;
-$total_gpus      = 0;
-$rented_gpus     = 0;
 
 foreach ($raw_machines as $m) {
+    if (!is_array($m)) {
+        continue;
+    }
     $mach_id   = (int) ($m['id'] ?? $m['machine_id'] ?? 0);
     $hostname  = (string) ($m['hostname'] ?? "Machine #{$mach_id}");
     $num_gpus  = max(1, (int) ($m['num_gpus'] ?? 1));
-    $total_gpus += $num_gpus;
 
     // Clean GPU Name (remove NVIDIA prefix if repetitive)
     $gpu_name = (string) ($m['gpu_name'] ?? 'GPU');
@@ -227,11 +234,7 @@ foreach ($raw_machines as $m) {
 
     // Rentals detection
     $running_rentals = (int) ($m['current_rentals_running'] ?? 0);
-    $resident_rentals = (int) ($m['current_rentals_resident'] ?? 0);
-    $on_demand_rentals = (int) ($m['current_rentals_running_on_demand'] ?? 0);
-    $reserved_rentals  = (int) ($m['current_rentals_running_reserved'] ?? 0);
-    $occupancy_raw     = (string) ($m['gpu_occupancy'] ?? '');
-    $occupancy_code    = strtoupper(trim($occupancy_raw));
+    $occupancy_code  = strtoupper(trim((string) ($m['gpu_occupancy'] ?? '')));
 
     // gpu_occupancy is a PER-GPU string, one character per GPU, so an 8-GPU host
     // returns something like "DDxxxxxx". Two consequences:
@@ -240,48 +243,11 @@ foreach ($raw_machines as $m) {
     //   2. Never treat "non-empty" as rented. An idle host still returns a
     //      full-length string of placeholder characters.
     // Testing for the known occupancy letters avoids depending on whatever the
-    // idle placeholder character happens to be.
-    $occ_on_demand     = (strpos($occupancy_code, 'D') !== false);
-    $occ_reserved      = (strpos($occupancy_code, 'R') !== false);
-    $occ_interruptible = (strpos($occupancy_code, 'I') !== false);
-    $occ_any           = $occ_on_demand || $occ_reserved || $occ_interruptible;
-
-    $is_rented = ($running_rentals > 0) || $occ_any;
-
-    // Rental status classification
-    if (!$is_online) {
-        $status_key   = 'offline';
-        $status_label = 'Offline';
-        $status_color = 'red';
-    } elseif ($is_rented) {
+    // idle placeholder character happens to be. The tile derives the rental
+    // type from the same letters client side.
+    $is_rented = ($running_rentals > 0) || preg_match('/[DRI]/', $occupancy_code) === 1;
+    if ($is_online && $is_rented) {
         $rented_count++;
-        $rented_gpus += $num_gpus;
-
-        if ($on_demand_rentals > 0 || $occ_on_demand) {
-            $status_key   = 'rented_on_demand';
-            $status_label = 'Rented (On-Demand)';
-            $status_color = 'green';
-        } elseif ($reserved_rentals > 0 || $occ_reserved) {
-            $status_key   = 'rented_reserved';
-            $status_label = 'Rented (Reserved)';
-            $status_color = 'purple';
-        } elseif ($occ_interruptible || $running_rentals > 0) {
-            $status_key   = 'rented_interruptible';
-            $status_label = 'Rented (Interruptible)';
-            $status_color = 'yellow';
-        } else {
-            $status_key   = 'rented';
-            $status_label = 'Rented';
-            $status_color = 'green';
-        }
-    } elseif ($listed) {
-        $status_key   = 'listed';
-        $status_label = 'Listed & Available';
-        $status_color = 'blue';
-    } else {
-        $status_key   = 'unlisted';
-        $status_label = 'Unlisted';
-        $status_color = 'gray';
     }
 
     // Pricing & Earnings
@@ -325,12 +291,8 @@ foreach ($raw_machines as $m) {
         'is_online'        => $is_online,
         'listed'           => $listed,
         'is_rented'        => $is_rented,
-        'status_key'       => $status_key,
-        'status_label'     => $status_label,
-        'status_color'     => $status_color,
         'occupancy_code'   => $occupancy_code,
         'running_rentals'  => $running_rentals,
-        'resident_rentals' => $resident_rentals,
         'earn_hour'        => $earn_hour,
         'earn_day'         => $earn_day,
         'listed_gpu_cost'  => $listed_gpu_cost,
@@ -351,12 +313,9 @@ $payload = [
     'summary'   => [
         'total_machines'  => count($processed_machines),
         'rented_machines' => $rented_count,
-        'total_gpus'      => $total_gpus,
-        'rented_gpus'     => $rented_gpus,
         'total_earn_hour' => round($total_earn_hour, 4),
         'total_earn_day'  => round($total_earn_day, 4),
-        'account_balance' => round($account_info['balance'], 2),
-        'account_credit'  => round($account_info['credit'], 2),
+        'account_balance' => round($balance, 2),
     ],
     'machines'  => $processed_machines,
 ];

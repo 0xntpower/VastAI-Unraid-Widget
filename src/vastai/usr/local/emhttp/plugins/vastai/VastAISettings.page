@@ -155,6 +155,11 @@ function toggleApiKeyVisibility() {
   }
 }
 
+// data.error can carry the Vast.ai API's own message, so never feed it to .html() raw.
+function vastEsc(s) {
+  return $('<div>').text(s == null ? '' : String(s)).html();
+}
+
 function testVastConnection() {
   const box = $('#vast_test_box');
   const btn = $('#vast_btn_test');
@@ -176,7 +181,7 @@ function testVastConnection() {
     type: 'POST',
     data: { test_key: typedKey },
     dataType: 'json',
-    timeout: 12000,
+    timeout: 20000,
     success: function(data) {
       btn.prop('disabled', false).text('Test Connection');
       if (data && data.success) {
@@ -189,14 +194,14 @@ function testVastConnection() {
         );
       } else {
         box.addClass('vast-test-error').html(
-          '<strong><i class="fa fa-times-circle"></i> Connection Failed:</strong> ' + (data.error || 'Unknown error occurred.')
+          '<strong><i class="fa fa-times-circle"></i> Connection Failed:</strong> ' + vastEsc((data && data.error) || 'Unknown error occurred.')
         );
       }
     },
     error: function(xhr, status, err) {
       btn.prop('disabled', false).text('Test Connection');
       box.addClass('vast-test-error').html(
-        '<strong><i class="fa fa-times-circle"></i> Request Failed:</strong> ' + status + ' - ' + err
+        '<strong><i class="fa fa-times-circle"></i> Request Failed:</strong> ' + vastEsc(status + ' - ' + err)
       );
     }
   });
