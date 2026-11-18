@@ -44,14 +44,15 @@ def fetch_live_vast_data():
         return None
 
     try:
-        mach_url = f"https://console.vast.ai/api/v0/machines/?owner=me&api_key={LIVE_API_KEY}"
-        user_url = f"https://console.vast.ai/api/v0/users/current/?api_key={LIVE_API_KEY}"
+        mach_url = "https://console.vast.ai/api/v0/machines/?owner=me"
+        user_url = "https://console.vast.ai/api/v0/users/current/"
+        headers = {'User-Agent': 'VastAI-Unraid-Widget/1.0', 'Authorization': f'Bearer {LIVE_API_KEY}'}
 
-        req = urllib.request.Request(mach_url, headers={'User-Agent': 'VastAI-Unraid-Widget/1.0'})
+        req = urllib.request.Request(mach_url, headers=headers)
         with urllib.request.urlopen(req, timeout=7) as resp:
             mach_data = json.loads(resp.read().decode())
 
-        req_user = urllib.request.Request(user_url, headers={'User-Agent': 'VastAI-Unraid-Widget/1.0'})
+        req_user = urllib.request.Request(user_url, headers=headers)
         user_data = {}
         try:
             with urllib.request.urlopen(req_user, timeout=5) as resp_user:
@@ -64,14 +65,11 @@ def fetch_live_vast_data():
         total_earn_hour = 0.0
         total_earn_day = 0.0
         rented_count = 0
-        total_gpus = 0
-        rented_gpus = 0
 
         for m in machines:
             mach_id = m.get('id') or m.get('machine_id') or 0
             hostname = m.get('hostname') or f"Machine #{mach_id}"
             num_gpus = max(1, int(m.get('num_gpus') or 1))
-            total_gpus += num_gpus
 
             gpu_name = m.get('gpu_name', 'GPU').replace('NVIDIA ', '')
             gpu_ram_mb = int(m.get('gpu_ram') or 0)
@@ -81,45 +79,12 @@ def fetch_live_vast_data():
             timeout = float(m.get('timeout') or 0)
             is_online = (timeout <= 0.0)
 
+            # Mirrors getvaststatus.php: gpu_occupancy is one character per GPU.
             running_rentals = int(m.get('current_rentals_running') or 0)
-            resident_rentals = int(m.get('current_rentals_resident') or 0)
-            on_demand_rentals = int(m.get('current_rentals_running_on_demand') or 0)
-            reserved_rentals = int(m.get('current_rentals_running_reserved') or 0)
             occupancy_code = (m.get('gpu_occupancy') or '').strip().upper()
-
-            is_rented = (running_rentals > 0) or bool(occupancy_code)
-
-            if not is_online:
-                status_key = 'offline'
-                status_label = 'Offline'
-                status_color = 'red'
-            elif is_rented:
+            is_rented = running_rentals > 0 or any(c in occupancy_code for c in 'DRI')
+            if is_online and is_rented:
                 rented_count += 1
-                rented_gpus += num_gpus
-                if on_demand_rentals > 0 or occupancy_code == 'D':
-                    status_key = 'rented_on_demand'
-                    status_label = 'Rented (On-Demand)'
-                    status_color = 'green'
-                elif reserved_rentals > 0 or occupancy_code == 'R':
-                    status_key = 'rented_reserved'
-                    status_label = 'Rented (Reserved)'
-                    status_color = 'purple'
-                elif occupancy_code == 'I' or running_rentals > 0:
-                    status_key = 'rented_interruptible'
-                    status_label = 'Rented (Interruptible)'
-                    status_color = 'yellow'
-                else:
-                    status_key = 'rented'
-                    status_label = 'Rented'
-                    status_color = 'green'
-            elif listed:
-                status_key = 'listed'
-                status_label = 'Listed & Available'
-                status_color = 'blue'
-            else:
-                status_key = 'unlisted'
-                status_label = 'Unlisted'
-                status_color = 'gray'
 
             earn_hour = float(m.get('earn_hour') or 0.0)
             earn_day = float(m.get('earn_day') or 0.0)
@@ -140,12 +105,8 @@ def fetch_live_vast_data():
                 'is_online': is_online,
                 'listed': listed,
                 'is_rented': is_rented,
-                'status_key': status_key,
-                'status_label': status_label,
-                'status_color': status_color,
                 'occupancy_code': occupancy_code,
                 'running_rentals': running_rentals,
-                'resident_rentals': resident_rentals,
                 'earn_hour': earn_hour,
                 'earn_day': earn_day,
                 'listed_gpu_cost': float(m.get('listed_gpu_cost') or 0.0),
@@ -164,12 +125,9 @@ def fetch_live_vast_data():
             'summary': {
                 'total_machines': len(processed),
                 'rented_machines': rented_count,
-                'total_gpus': total_gpus,
-                'rented_gpus': rented_gpus,
                 'total_earn_hour': round(total_earn_hour, 4),
                 'total_earn_day': round(total_earn_day, 4),
                 'account_balance': round(float(user_data.get('balance') or 0.0), 2),
-                'account_credit': round(float(user_data.get('credit') or 0.0), 2),
             },
             'machines': processed
         }
@@ -195,8 +153,6 @@ def get_scenario_data(scenario):
             'summary': {
                 'total_machines': 3,
                 'rented_machines': 2,
-                'total_gpus': 10,
-                'rented_gpus': 9,
                 'total_earn_hour': 24.845,
                 'total_earn_day': 596.28,
                 'account_balance': 482.50,
@@ -214,9 +170,6 @@ def get_scenario_data(scenario):
                     'is_online': True,
                     'listed': True,
                     'is_rented': True,
-                    'status_key': 'rented_on_demand',
-                    'status_label': 'Rented (On-Demand)',
-                    'status_color': 'green',
                     'occupancy_code': 'D',
                     'running_rentals': 1,
                     'earn_hour': 23.20,
@@ -242,9 +195,6 @@ def get_scenario_data(scenario):
                     'is_online': True,
                     'listed': True,
                     'is_rented': True,
-                    'status_key': 'rented_interruptible',
-                    'status_label': 'Rented (Interruptible)',
-                    'status_color': 'yellow',
                     'occupancy_code': 'I',
                     'running_rentals': 1,
                     'earn_hour': 0.0147,
@@ -270,9 +220,6 @@ def get_scenario_data(scenario):
                     'is_online': True,
                     'listed': True,
                     'is_rented': False,
-                    'status_key': 'listed',
-                    'status_label': 'Listed & Available',
-                    'status_color': 'blue',
                     'occupancy_code': '',
                     'running_rentals': 0,
                     'earn_hour': 0.0,
@@ -295,8 +242,6 @@ def get_scenario_data(scenario):
             'summary': {
                 'total_machines': 1,
                 'rented_machines': 0,
-                'total_gpus': 1,
-                'rented_gpus': 0,
                 'total_earn_hour': 0.0,
                 'total_earn_day': 0.0,
                 'account_balance': 11.46,
@@ -314,9 +259,6 @@ def get_scenario_data(scenario):
                     'is_online': False,
                     'listed': True,
                     'is_rented': False,
-                    'status_key': 'offline',
-                    'status_label': 'Offline',
-                    'status_color': 'red',
                     'earn_hour': 0.0,
                     'earn_day': 0.0,
                     'listed_gpu_cost': 0.047,
@@ -348,16 +290,11 @@ current_scenario = 'live'
 
 
 class UnraidPreviewHandler(SimpleHTTPRequestHandler):
+    # No CORS headers on purpose: the live scenario serves real account data, so
+    # only the same-origin preview page may read it.
     def end_headers(self):
-        self.send_header('Access-Control-Allow-Origin', '*')
-        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-        self.send_header('Access-Control-Allow-Headers', '*')
         self.send_header('Cache-Control', 'no-cache, no-store, must-revalidate')
         super().end_headers()
-
-    def do_OPTIONS(self):
-        self.send_response(200)
-        self.end_headers()
 
     def do_HEAD(self):
         parsed = urllib.parse.urlparse(self.path)
@@ -452,7 +389,8 @@ if __name__ == '__main__':
     # Pre-fetch live data at startup so the first request is instant!
     print("Pre-fetching initial Vast.ai data...")
     fetch_live_vast_data()
-    server = ThreadingHTTPServer(("", PORT), UnraidPreviewHandler)
+    # Loopback only. The live scenario uses your real API key.
+    server = ThreadingHTTPServer(("127.0.0.1", PORT), UnraidPreviewHandler)
     server.daemon_threads = True
     print(f"Threading preview server running on http://localhost:{PORT}")
     try:
