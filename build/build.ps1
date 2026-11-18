@@ -35,22 +35,15 @@ $vastJs     = Get-FileContentSafe "javascript\vastai.js"
 $vastCss    = Get-FileContentSafe "styles\vastai.css"
 $pluginDesc = Get-FileContentSafe "README.md"
 
-# Base64 encode images
-$iconPath = Join-Path $srcDir "images\vastai.png"
-$iconB64 = ""
-if (Test-Path $iconPath) {
-    $iconBytes = [System.IO.File]::ReadAllBytes($iconPath)
-    $iconB64 = [Convert]::ToBase64String($iconBytes)
+# Base64 encode images. ReadAllBytes throws on a missing file, so a bad path
+# fails the build instead of shipping an empty icon.
+function Get-FileBase64([string]$relPath) {
+    return [Convert]::ToBase64String([System.IO.File]::ReadAllBytes((Join-Path $srcDir $relPath)))
 }
-
+$iconB64 = Get-FileBase64 "images/vastai.png"
 # Unraid resolves a .page Icon= value to /plugins/<name>/icons/<file>,
 # which is a different directory from the images/ one the banner uses.
-$navIconPath = Join-Path $srcDir ("icons" + [IO.Path]::DirectorySeparatorChar + "vastai.png")
-$navIconB64 = ""
-if (Test-Path $navIconPath) {
-    $navIconBytes = [System.IO.File]::ReadAllBytes($navIconPath)
-    $navIconB64 = [Convert]::ToBase64String($navIconBytes)
-}
+$navIconB64 = Get-FileBase64 "icons/vastai.png"
 
 $plgContent = @"
 <?xml version='1.0' standalone='yes'?>
@@ -84,6 +77,22 @@ $plgContent = @"
 ##Vast.ai Monitor
 
 ###$version
+- Fix: setting the refresh interval to Off had no effect. The tile kept polling
+  every 30 seconds.
+- Fix: a response from the API that was not machine data, such as a CDN error
+  page, was treated as an empty fleet and replaced the last good data.
+- Fix: a rejected API key is now reported as such. Previously the tile kept
+  showing the old data as STALE for as long as the key stayed invalid.
+- Fix: after changing the API key, the tile could briefly show the previous
+  account's machines. The cache is now kept per key.
+- Fix: the tile and Test Connection gave up before a slow API answered and
+  reported the local service as unreachable.
+- Security: the API key is sent in an Authorization header instead of the URL,
+  and requests are restricted to HTTPS, including redirects.
+- Security: Test Connection no longer renders the API's error text as HTML.
+- API responses are now requested gzip-compressed.
+
+###2026.09.17.0040
 - The plugin now has an icon everywhere Unraid shows one. The Plugins page entry,
   the Settings and Utilities nav entry and the dashboard tile all use the Vast.ai
   mark instead of a generic glyph or a missing image.
@@ -120,6 +129,7 @@ $plgContent = @"
 <FILE Run="/bin/bash">
 <INLINE>
 rm -rf &emhttp;
+rm -f /tmp/vastai_cache*
 mkdir -p &plugin;
 mkdir -p &emhttp;/include
 mkdir -p &emhttp;/javascript
@@ -212,7 +222,7 @@ echo ""
 <INLINE>
 echo "Removing &name;..."
 rm -rf &emhttp;
-rm -f /tmp/vastai_cache.json*
+rm -f /tmp/vastai_cache*
 if [ -f &plugin;/&name;.cfg ]; then
   sed -i 's|^API_KEY=.*|API_KEY=""|' &plugin;/&name;.cfg
   echo "Vast.ai API key scrubbed from &plugin;/&name;.cfg"

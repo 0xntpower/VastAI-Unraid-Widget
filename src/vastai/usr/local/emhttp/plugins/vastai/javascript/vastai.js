@@ -309,7 +309,9 @@
       type: 'GET',
       dataType: 'json',
       cache: false,
-      timeout: 12000,
+      // Above the backend's worst case (9 s machines + 5 s balance), so a slow
+      // API reads as slow rather than as the local service being down.
+      timeout: 20000,
       success: function (data) {
         if ($icon.length) $icon.removeClass('spinning');
         isFetching = false;
@@ -379,7 +381,8 @@
     const $tile = $('#vast_tile');
     if (!$tile.length) return;
 
-    const initialInterval = $tile.data('interval') || 30;
+    // ?? not ||: 0 is the "Off / Manual only" setting and must stay 0.
+    const initialInterval = $tile.data('interval') ?? 30;
 
     $('#vast_int').on('change', function () {
       setupPolling($(this).val());

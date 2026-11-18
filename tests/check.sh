@@ -268,6 +268,20 @@ else
   pass "test_key is POST-only"
 fi
 
+# A key in the query string lands in every log between here and Vast.ai.
+if grep -qE '[?&]api_key=[{$]' "$SRC/include/getvaststatus.php" "$ROOT/preview/serve_preview.py"; then
+  bad "the API key is put in a URL again, send it as an Authorization header"
+else
+  pass "the API key is sent as a header, not in a URL"
+fi
+
+# INTERVAL=0 means "Off". `|| 30` turned it into 30 and the tile kept polling.
+if grep -qE "data\('interval'\) *\|\|" "$SRC/javascript/vastai.js"; then
+  bad "the tile reads data-interval with ||, which turns Off (0) into 30"
+else
+  pass "an interval of 0 (Off) survives to setupPolling"
+fi
+
 # Every var() must name a variable Unraid actually defines, or themes break.
 if grep -qE 'var\(--(text-main|text-muted|control-bg)' "$SRC/styles/vastai.css"; then
   bad "CSS references variables Unraid does not define"

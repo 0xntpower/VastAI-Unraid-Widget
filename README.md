@@ -9,7 +9,7 @@ An Unraid 6.12+ and 7.x plugin that adds a dashboard tile for your Vast.ai host 
 - **Hardware metrics**: GPU model, VRAM, real-time GPU temperature, and host reliability score.
 - **System specs**: An expandable "Show details" toggle displays CPU, RAM, storage, and network bandwidth.
 - **Fleet summary**: The tile header shows how many machines are rented out of the total. A summary line above the table shows the combined hourly earnings rate, the projected daily figure, and your account balance when it is above zero.
-- **API caching**: Server-side response caching in `/tmp/vastai_cache.json` (configurable TTL, default 30s) keeps multiple open dashboard tabs from each hitting the Vast.ai API. If the API becomes unreachable the tile falls back to the last cached response, labels it `STALE`, and backs off for 30 seconds before retrying rather than retrying on every poll.
+- **API caching**: Server-side response caching in `/tmp/vastai_cache_<key hash>.json` (configurable TTL, default 30s) keeps multiple open dashboard tabs from each hitting the Vast.ai API. If the API becomes unreachable the tile falls back to the last cached response, labels it `STALE`, and backs off for 30 seconds before retrying rather than retrying on every poll. A rejected API key is reported as an error rather than masked by the cache.
 
 ## Installation
 
@@ -40,6 +40,7 @@ Settings are in the Unraid webGUI under **Settings** > **Utilities** > **Vast.ai
 - **Refresh interval**: How often the dashboard tile updates in the background (10s, 30s, 60s, 2m, or off).
 - **Cache TTL**: How long cached API data stays valid before fetching fresh data (15s, 30s, 60s, or 2m).
 - **Dashboard placement**: Column 1 (left), Column 2 (middle), or Column 3 (right).
+- **Show account balance**: Show or hide your account balance in the summary line.
 
 ## Where your API key is stored
 
@@ -50,9 +51,9 @@ Unraid plugin configuration and it survives reboots and plugin upgrades.
 Uninstalling the plugin blanks the `API_KEY` line in that file. Your other settings are
 left in place so a reinstall keeps your preferences.
 
-The key is sent to Vast.ai over HTTPS with certificate verification enabled. The plugin
-has no other network destination and no third-party runtime dependencies.
-- **Show account balance**: Show or hide your account balance in the summary line.
+The key is sent to Vast.ai in an `Authorization: Bearer` header, never in a URL, over HTTPS
+with certificate verification enabled. Redirects are followed only to HTTPS. The plugin has
+no other network destination and no third-party runtime dependencies.
 
 ## Listing on Community Applications
 
