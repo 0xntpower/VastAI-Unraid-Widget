@@ -170,7 +170,7 @@ def get_scenario_data(scenario):
                     'is_online': True,
                     'listed': True,
                     'is_rented': True,
-                    'occupancy_code': 'D',
+                    'occupancy_code': 'DDDDDDDD',
                     'running_rentals': 1,
                     'earn_hour': 23.20,
                     'earn_day': 556.80,

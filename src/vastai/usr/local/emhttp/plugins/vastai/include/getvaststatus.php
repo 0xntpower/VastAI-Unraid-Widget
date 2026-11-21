@@ -244,7 +244,7 @@ foreach ($raw_machines as $m) {
     //      full-length string of placeholder characters.
     // Testing for the known occupancy letters avoids depending on whatever the
     // idle placeholder character happens to be. The tile derives the rental
-    // type from the same letters client side.
+    // type and the share of GPUs rented from the same letters client side.
     $is_rented = ($running_rentals > 0) || preg_match('/[DRI]/', $occupancy_code) === 1;
     if ($is_online && $is_rented) {
         $rented_count++;

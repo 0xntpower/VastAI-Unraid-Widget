@@ -77,6 +77,14 @@ $plgContent = @"
 ##Vast.ai Monitor
 
 ###$version
+- Fix: a multi-GPU host with any GPU rented showed 100% utilization. The column
+  now shows the share of GPUs rented, and a dash when the API does not report it.
+- Fix: a rented host with no rental count from the API was labelled "1 job". A
+  job count is now shown only when the API provides one.
+- Fix: a host with both on-demand and interruptible rentals was labelled On-Demand
+  but drawn with the interruptible bar colour. The bar now matches the label.
+
+###2026.11.18.1829
 - Fix: setting the refresh interval to Off had no effect. The tile kept polling
   every 30 seconds.
 - Fix: a response from the API that was not machine data, such as a CDN error
