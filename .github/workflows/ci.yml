@@ -1,22 +1,56 @@
 name: build-check
 
 on:
-  push:
-    branches: [main, dev]
   pull_request:
     branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
 
 # The job only reads the tree. Do not hand it a token that can write.
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  # The ruleset on main requires this job by its name, "check". Rename it and
+  # every merge is blocked until .github/ruleset-main.json is changed to match.
   check:
-    runs-on: ubuntu-latest
+    # A named image. ubuntu-latest moved from 24.04 to 26.04 between two runs
+    # of this job with no commit here.
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
-      # php, pwsh, node and python3 are all preinstalled on ubuntu-latest,
-      # so there is deliberately nothing to set up here.
-      - run: ./tests/check.sh
+          # check.sh compares VERSION and vastai.plg with the base commit.
+          fetch-depth: 0
+
+      - name: Tool versions
+        run: |
+          pwsh --version
+          php --version | head -n 1
+          node --version
+          python3 --version
+
+      - name: Gate
+        run: ./tests/check.sh
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.sha || github.event.before || 'HEAD^' }}
+
+      # The runner's PHP is newer than the one on an Unraid server. Lint and run
+      # the PHP tests again on 8.2, older than any PHP a supported Unraid ships.
+      # No network, and the tree is mounted read-only.
+      - name: PHP 8.2
+        run: |
+          docker run --rm --network none -v "$PWD:/repo:ro" -w /repo php:8.2-cli-alpine sh -ec '
+            for f in src/vastai/usr/local/emhttp/plugins/vastai/*.page src/vastai/usr/local/emhttp/plugins/vastai/include/*.php
+            do
+              php -l "$f"
+            done
+            php tests/endpoint.test.php
+            php tests/shell.test.php'

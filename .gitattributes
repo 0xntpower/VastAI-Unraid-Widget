@@ -4,3 +4,7 @@
 * text=auto eol=lf
 
 *.png binary
+
+# Generated. GitHub collapses its diff in a pull request. The scripts it runs as
+# root are reviewed where they are readable, in tests/run-blocks.golden.
+vastai.plg linguist-generated=true

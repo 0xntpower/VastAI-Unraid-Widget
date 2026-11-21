@@ -34,6 +34,11 @@ venv/
 *.token
 *.secret
 *vast_api_key*
+.env
+.env.*
+# An API answer as recorded, before tests/scrub-fixture.py has removed what
+# identifies the account. Never commit one.
+*.raw.json
 /boot/
 *.cfg
 !src/**/default.cfg
@@ -57,3 +62,4 @@ dist/
 # Review and tooling artifacts
 .full-review/
 .repowise/
+.playwright-mcp/
