@@ -34,12 +34,34 @@
   }
 
   /**
+   * How many of a machine's GPUs are rented, or null when that is not known.
+   * occupancy_code has one character per GPU, with D, R or I marking a rented
+   * one. When its length is not the GPU count, or only the rental counter says
+   * rented, the split was not reported and any percentage would be made up.
+   */
+  function rentedGpus(occ, gpus, isRented) {
+    if (!isRented) return 0;
+    if (gpus === 1) return 1;
+    const busy = occ.length === gpus ? (occ.match(/[DRI]/g) || []).length : 0;
+    return busy || null;
+  }
+
+  /**
    * Render table row for a single machine
    */
   function renderMachineRow(m, index) {
     const isRented = !!m.is_rented;
     const isOnline = !!m.is_online;
     const isListed = !!m.listed;
+    const gpus = parseInt(m.num_gpus, 10) || 1;
+    // occupancy_code is a per-GPU string (one char per GPU), so test for the
+    // letter rather than comparing the whole string to a single character.
+    const occ = String(m.occupancy_code || '');
+    const busyGpus = rentedGpus(occ, gpus, isRented);
+    let occDesc = 'Active';
+    if (occ.includes('D')) occDesc = 'On-Demand';
+    else if (occ.includes('R')) occDesc = 'Reserved';
+    else if (occ.includes('I')) occDesc = 'Interruptible';
 
     // Status Column
     let statusHtml = '';
@@ -51,20 +73,15 @@
         <div class="vast-status-sub">Unreachable</div>
       `;
     } else if (isRented) {
-      // occupancy_code is a per-GPU string (one char per GPU), so test for the
-      // letter rather than comparing the whole string to a single character.
-      const occ = m.occupancy_code || '';
-      let occDesc = 'Active';
-      if (occ.includes('D')) occDesc = 'On-Demand';
-      else if (occ.includes('R')) occDesc = 'Reserved';
-      else if (occ.includes('I')) occDesc = 'Interruptible';
-
-      const runningCount = m.running_rentals || 1;
+      // The counter can be 0 while the occupancy letters say rented. Print a
+      // job count only when the API gave one.
+      const jobs = parseInt(m.running_rentals, 10) || 0;
+      const jobsText = jobs > 0 ? ` • ${jobs} ${jobs === 1 ? 'job' : 'jobs'}` : '';
       statusHtml = `
         <span class="vast-status-indicator vast-status-active">
           <span class="vast-status-dot"></span> active
         </span>
-        <div class="vast-status-sub">${occDesc} • ${runningCount} ${runningCount === 1 ? 'job' : 'jobs'}</div>
+        <div class="vast-status-sub">${occDesc}${jobsText}</div>
       `;
     } else if (isListed) {
       statusHtml = `
@@ -93,7 +110,6 @@
       // listed_gpu_cost and min_bid_price are PER GPU, while earn_hour in the
       // branch above is per machine. Scale to machine level so the same column
       // always means the same thing, and show the per-GPU ask alongside it.
-      const gpus = m.num_gpus || 1;
       const askMachine = (parseFloat(m.listed_gpu_cost) || 0) * gpus;
       const minMachine = (parseFloat(m.min_bid_price) || 0) * gpus;
       rateHtml = `
@@ -128,17 +144,20 @@
 
     // Utilization Bar Column
     let utilPercent = 0;
+    let utilText = '0%';
     let fillClass = 'fill-gray';
     if (isRented) {
-      utilPercent = 100;
-      fillClass = (m.occupancy_code || '').includes('I') ? 'fill-amber' : 'fill-green';
+      // Share of GPUs rented. With an unknown split the bar is filled, because
+      // something is rented, but no number is printed.
+      utilPercent = busyGpus === null ? 100 : Math.round(100 * busyGpus / gpus);
+      utilText = busyGpus === null ? '&ndash;' : `${utilPercent}%`;
+      fillClass = occDesc === 'Interruptible' ? 'fill-amber' : 'fill-green';
     } else if (isListed) {
-      utilPercent = 0;
       fillClass = 'fill-blue';
     }
 
     const utilHtml = `
-      <span class="vast-util-text">${utilPercent}%</span>
+      <span class="vast-util-text"${busyGpus === null ? ' title="Rented. The API did not report how many GPUs."' : ''}>${utilText}</span>
       <div class="vast-util-bar">
         <div class="vast-util-fill ${fillClass}" style="width: ${utilPercent}%;"></div>
       </div>
