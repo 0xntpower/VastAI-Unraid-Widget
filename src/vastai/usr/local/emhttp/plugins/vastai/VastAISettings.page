@@ -5,33 +5,12 @@ Tag="cubes"
 ---
 <?php
 /**
- * Vast.ai Plugin - Settings Page
- * Configures API keys, refresh intervals, cache policies, and layout.
+ * Vast.ai Plugin - settings page
+ * The form posts to Unraid's /update.php, which writes vastai.cfg.
  */
 
-$base = '/usr/local/emhttp/plugins/vastai';
-$config_file = '/boot/config/plugins/vastai/vastai.cfg';
-$default_cfg = "$base/default.cfg";
-
-$cfg = [];
-if (file_exists($default_cfg)) {
-    $default_ini = @parse_ini_file($default_cfg);
-    if (is_array($default_ini)) {
-        $cfg = array_merge($cfg, $default_ini);
-    }
-}
-if (file_exists($config_file)) {
-    $user_ini = @parse_ini_file($config_file);
-    if (is_array($user_ini)) {
-        $cfg = array_merge($cfg, $user_ini);
-    }
-}
-
-$api_key      = (string) ($cfg['API_KEY'] ?? '');
-$interval     = (int) ($cfg['INTERVAL'] ?? 30);
-$cache_ttl    = (int) ($cfg['CACHE_TTL'] ?? 30);
-$column       = (string) ($cfg['COLUMN'] ?? 'column1');
-$show_balance = (($cfg['SHOW_BALANCE'] ?? '1') !== '0');
+require_once '/usr/local/emhttp/plugins/vastai/include/config.php';
+$cfg = vast_config();
 ?>
 
 <style>
@@ -87,7 +66,7 @@ $show_balance = (($cfg['SHOW_BALANCE'] ?? '1') !== '0');
   <img src="/plugins/vastai/images/vastai.png" alt="Vast.ai">
   <div>
     <h3>_(Vast.ai Dashboard Widget Configuration)_</h3>
-    <p>_(Monitor your listed Vast.ai machines, active rentals, real-time hourly income, and hardware telemetry right on the Unraid Dashboard.)_</p>
+    <p>_(Shows your Vast.ai host machines, their rentals and earnings on the Unraid Dashboard. The tile can be dragged to another column like any built-in tile.)_</p>
   </div>
 </div>
 
@@ -96,46 +75,38 @@ $show_balance = (($cfg['SHOW_BALANCE'] ?? '1') !== '0');
 
 _(Vast.ai API Key)_:
 : <div class="vast-input-group">
-    <input type="password" id="vast_api_key_field" name="API_KEY" style="width: 380px;" value="<?=htmlspecialchars($api_key, ENT_QUOTES)?>" placeholder="_(Enter your Vast.ai API Key)_" required>
+    <input type="password" id="vast_api_key_field" name="API_KEY" style="width: 380px;" value="<?=htmlspecialchars($cfg['api_key'], ENT_QUOTES)?>" placeholder="_(Enter your Vast.ai API Key)_" required>
     <button type="button" class="button" onclick="toggleApiKeyVisibility()"><i id="vast_eye_icon" class="fa fa-eye"></i></button>
     <button type="button" class="button" id="vast_btn_test" onclick="testVastConnection()">_(Test Connection)_</button>
   </div>
   <div id="vast_test_box" class="vast-test-result"></div>
   <span style="font-size: 0.85rem; opacity: 0.75;">
-    _(Obtain or generate your API key from the)_ <a href="https://console.vast.ai/manage-keys/" target="_blank" rel="noopener">_(Vast.ai Key Management Console)_</a>.
+    _(Create a key in the)_ <a href="https://console.vast.ai/manage-keys/" target="_blank" rel="noopener">_(Vast.ai Key Management Console)_</a>. _(Restrict it to reading machines and reading account info. The plugin needs nothing else, and an unrestricted key can change your listings and move account credit.)_
+    _(The key is saved in plaintext on the flash drive. Test Connection tries the key in the field without saving it.)_
   </span>
 
 _(Default Refresh Interval)_:
 : <select name="INTERVAL">
-    <option value="10"  <?=$interval===10 ?'selected':''?>>10 _(seconds)_</option>
-    <option value="30"  <?=$interval===30 ?'selected':''?>>30 _(seconds - Recommended)_</option>
-    <option value="60"  <?=$interval===60 ?'selected':''?>>60 _(seconds)_</option>
-    <option value="120" <?=$interval===120?'selected':''?>>2 _(minutes)_</option>
-    <option value="0"   <?=$interval===0  ?'selected':''?>>_(Off / Manual only)_</option>
+    <?php foreach (VAST_INTERVALS as $v): ?>
+    <option value="<?=$v?>" <?=$cfg['interval'] === $v ? 'selected' : ''?>><?php if ($v === 0): ?>_(Off / Manual only)_<?php elseif ($v < 120): ?><?=$v?> _(seconds)_<?php else: ?><?=$v / 60?> _(minutes)_<?php endif; ?></option>
+    <?php endforeach; ?>
   </select>
-  <span style="font-size: 0.85rem; opacity: 0.75;">_(Interval for automatic background status polling on the dashboard.)_</span>
+  <span style="font-size: 0.85rem; opacity: 0.75;">_(How often an open dashboard asks this server for data. A dashboard in a background tab and a closed tile do not ask.)_</span>
 
 _(Local Cache Expiration)_:
 : <select name="CACHE_TTL">
-    <option value="15"  <?=$cache_ttl===15 ?'selected':''?>>15 _(seconds)_</option>
-    <option value="30"  <?=$cache_ttl===30 ?'selected':''?>>30 _(seconds - Recommended)_</option>
-    <option value="60"  <?=$cache_ttl===60 ?'selected':''?>>60 _(seconds)_</option>
-    <option value="120" <?=$cache_ttl===120?'selected':''?>>2 _(minutes)_</option>
+    <?php foreach (VAST_CACHE_TTLS as $v): ?>
+    <option value="<?=$v?>" <?=$cfg['cache_ttl'] === $v ? 'selected' : ''?>><?php if ($v < 120): ?><?=$v?> _(seconds)_<?php else: ?><?=$v / 60?> _(minutes)_<?php endif; ?></option>
+    <?php endforeach; ?>
   </select>
-  <span style="font-size: 0.85rem; opacity: 0.75;">_(Protects against API rate limits across multiple open dashboard tabs.)_</span>
-
-_(Dashboard Placement)_:
-: <select name="COLUMN">
-    <option value="column1" <?=$column==='column1'?'selected':''?>>_(Left Column)_</option>
-    <option value="column2" <?=$column==='column2'?'selected':''?>>_(Middle Column)_</option>
-    <option value="column3" <?=$column==='column3'?'selected':''?>>_(Right Column)_</option>
-  </select>
+  <span style="font-size: 0.85rem; opacity: 0.75;">_(How long this server reuses the last Vast.ai answer before asking again. All open dashboards share it.)_</span>
 
 _(Show Account Balance)_:
 : <select name="SHOW_BALANCE">
-    <option value="1" <?=$show_balance?'selected':''?>>_(Yes)_</option>
-    <option value="0" <?=!$show_balance?'selected':''?>>_(No)_</option>
+    <option value="1" <?=$cfg['show_balance'] ? 'selected' : ''?>>_(Yes)_</option>
+    <option value="0" <?=$cfg['show_balance'] ? '' : 'selected'?>>_(No)_</option>
   </select>
+  <span style="font-size: 0.85rem; opacity: 0.75;">_(With No, the balance is not requested from Vast.ai.)_</span>
 
 &nbsp;
 : <input type="submit" value="_(Apply)_">
@@ -173,6 +144,8 @@ function testVastConnection() {
     return;
   }
 
+  // Restore the label the page rendered, which may be a translation.
+  const label = btn.text();
   btn.prop('disabled', true).text('Testing…');
   box.removeClass('vast-test-success vast-test-error').show().html('<i class="fa fa-spinner fa-spin"></i> Connecting to Vast.ai API…');
 
@@ -183,25 +156,29 @@ function testVastConnection() {
     dataType: 'json',
     timeout: 20000,
     success: function(data) {
-      btn.prop('disabled', false).text('Test Connection');
+      btn.prop('disabled', false).text(label);
       if (data && data.success) {
         const sum = data.summary || {};
-        const count = sum.total_machines || 0;
-        const rented = sum.rented_machines || 0;
+        const n = function (v) { v = Number(v); return isFinite(v) ? v : 0; };
+        // null means the balance is not known: switched off, or the key may not
+        // read account info. Saying $0.00 would be a guess.
+        const balance = sum.account_balance === null || sum.account_balance === undefined
+          ? 'Account balance: not available (it is switched off, or this key cannot read account info).'
+          : 'Account balance: $' + n(sum.account_balance).toFixed(2) + '.';
         box.addClass('vast-test-success').html(
           '<strong><i class="fa fa-check-circle"></i> Connection Successful!</strong><br>' +
-          'Found ' + count + ' machine(s) (' + rented + ' currently rented). Total earnings rate: $' + (sum.total_earn_hour || 0).toFixed(3) + '/hr. Account balance: $' + (sum.account_balance || 0).toFixed(2)
+          'Found ' + n(sum.total_machines) + ' machine(s) (' + n(sum.rented_machines) + ' currently rented). Total earnings rate: $' + n(sum.total_earn_hour).toFixed(3) + '/hr. ' + balance
         );
       } else {
         box.addClass('vast-test-error').html(
-          '<strong><i class="fa fa-times-circle"></i> Connection Failed:</strong> ' + vastEsc((data && data.error) || 'Unknown error occurred.')
+          '<strong><i class="fa fa-times-circle"></i> ' + (data && data.code === 'auth' ? 'Key Rejected:' : 'Connection Failed:') + '</strong> ' + vastEsc((data && data.error) || 'Unknown error occurred.')
         );
       }
     },
     error: function(xhr, status, err) {
-      btn.prop('disabled', false).text('Test Connection');
+      btn.prop('disabled', false).text(label);
       box.addClass('vast-test-error').html(
-        '<strong><i class="fa fa-times-circle"></i> Request Failed:</strong> ' + vastEsc(status + ' - ' + err)
+        '<strong><i class="fa fa-times-circle"></i> Request Failed:</strong> ' + vastEsc('this server did not answer (' + status + (err ? ', ' + err : '') + ')')
       );
     }
   });

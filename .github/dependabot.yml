@@ -1,0 +1,7 @@
+# Keeps the pinned commit of actions/checkout in ci.yml current.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly

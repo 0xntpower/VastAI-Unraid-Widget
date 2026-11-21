@@ -1,0 +1,52 @@
+{
+  "machines": [
+    {
+      "id": 101, "hostname": "single-idle", "num_gpus": 1, "gpu_name": "NVIDIA RTX 4090", "gpu_ram": 24564,
+      "listed": true, "timeout": 0, "gpu_occupancy": "x ", "current_rentals_running": 0,
+      "earn_hour": 0.0021, "earn_day": 0.41, "listed_gpu_cost": 0.4, "min_bid_price": 0.2,
+      "reliability2": 0.9951, "gpu_max_cur_temp": 45.0, "verification": "verified",
+      "cpu_name": "AMD EPYC 7763 64-Core Processor", "cpu_cores": 64, "cpu_ram": 128774,
+      "disk_space": 476, "avail_disk_space": 674, "inet_down": 912.4, "inet_up": 880.1
+    },
+    {
+      "id": 102, "hostname": "eight-partly", "num_gpus": 8, "gpu_name": "RTX 5090", "gpu_ram": 32607,
+      "listed": true, "timeout": 0, "gpu_occupancy": "D D x x x x x x ", "current_rentals_running": 2,
+      "earn_hour": 1.5, "earn_day": 36.0, "listed_gpu_cost": 0.75, "min_bid_price": 0.3,
+      "reliability2": 0.9973958, "gpu_max_cur_temp": 71.0, "verification": "verified",
+      "cpu_name": "Intel Xeon Platinum 8480+ 56-Cores", "cpu_cores": 112, "cpu_ram": 515072,
+      "disk_space": 3600, "avail_disk_space": 2100, "inet_down": 9400, "inet_up": 9100
+    },
+    {
+      "id": 103, "hostname": "four-idle", "num_gpus": 4, "gpu_name": "RTX 3090", "gpu_ram": 24576,
+      "listed": true, "timeout": 0, "gpu_occupancy": "x x x x ", "current_rentals_running": 0,
+      "earn_hour": 0, "earn_day": 0, "listed_gpu_cost": 0.5, "min_bid_price": 0.25
+    },
+    {
+      "id": 104, "hostname": "offline-rented", "num_gpus": 2, "gpu_name": "RTX 4090", "gpu_ram": 24564,
+      "listed": true, "timeout": 120, "gpu_occupancy": "D x ", "current_rentals_running": 1,
+      "earn_hour": 0.3, "earn_day": 7.2, "listed_gpu_cost": 0.4
+    },
+    {
+      "id": 105, "hostname": "letters-only", "num_gpus": 4, "gpu_name": "RTX 4080", "gpu_ram": 16376,
+      "listed": true, "timeout": 0, "gpu_occupancy": "x R x x ",
+      "earn_hour": 0.2, "earn_day": 4.8, "listed_gpu_cost": 0.3, "min_bid_price": 0.1
+    },
+    {
+      "id": 106, "hostname": "interruptible", "num_gpus": 2, "gpu_name": "RTX 4070", "gpu_ram": 12282,
+      "listed": true, "timeout": 0, "gpu_occupancy": "I I ", "current_rentals_running": 2,
+      "earn_hour": 0.12, "earn_day": 2.9, "gpu_max_cur_temp": 83.5, "reliability2": 0.91
+    },
+    {
+      "id": 107, "hostname": "unlisted-never-rented", "num_gpus": 1, "gpu_name": "GTX 1080 Ti", "gpu_ram": 11264,
+      "listed": false, "timeout": 0, "gpu_occupancy": "x ",
+      "earn_hour": 8.088995e-55, "earn_day": 0.0008247081, "verification": "unverified"
+    },
+    {
+      "id": 108, "hostname": "counter-only", "num_gpus": 4, "gpu_name": "RTX A6000", "gpu_ram": 49140,
+      "listed": true, "timeout": 0, "gpu_occupancy": "", "current_rentals_running": 1,
+      "earn_hour": 0.4, "earn_day": 9.6
+    },
+    "not a machine",
+    null
+  ]
+}

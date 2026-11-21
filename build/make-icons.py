@@ -8,8 +8,8 @@ themes are light, so an opaque dark square reads as a misplaced block. This
 crops to the badge and cuts the corners to transparency.
 
 Outputs, both RGBA:
-  src/.../images/vastai.png   128x128  Plugins page entry and the settings banner
-  src/.../icons/vastai.png     48x48   Settings > Utilities nav entry
+  src/.../images/vastai.png   128x128  Plugins page entry, Settings entry and the settings banner
+  src/.../icons/vastai.png     48x48   glyph in the dashboard tile header
 
 Requires Pillow. Run:  python3 build/make-icons.py
 """
