@@ -1,15 +1,21 @@
 /**
- * Vast.ai Unraid Plugin - Native Dashboard Renderer
- * Implements Unraid's standardized tabular dashboard design language.
+ * Vast.ai Unraid Plugin - dashboard tile
+ *
+ * Polls the plugin's endpoint and draws its answer as a table in the tile.
+ * The endpoint decides what state a machine is in and what it costs. This file
+ * only draws that, so the two cannot disagree.
  */
 
 (function () {
   'use strict';
 
+  const ENDPOINT = '/plugins/vastai/include/getvaststatus.php';
+
   let pollTimer = null;
   let isFetching = false;
   let showHardwareDetails = false;
   let lastData = null;
+  let lastRenderKey = null;
 
   function escapeHtml(str) {
     if (str === null || str === undefined) return '';
@@ -21,149 +27,118 @@
       .replace(/'/g, '&#039;');
   }
 
+  // Every number the endpoint sends goes through here before it is printed, so
+  // a field of the wrong type can never reach the page as markup.
+  function num(v) {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : 0;
+  }
+
   function formatMoney(amount, decimals = 2) {
-    const num = parseFloat(amount) || 0;
-    return '$' + num.toFixed(decimals);
+    return '$' + num(amount).toFixed(decimals);
   }
 
   function formatRate(amount) {
-    const num = parseFloat(amount) || 0;
-    if (num === 0) return '$0.00/hr';
-    if (num < 0.01) return '$' + num.toFixed(4) + '/hr';
-    return '$' + num.toFixed(3) + '/hr';
+    const n = num(amount);
+    if (n < 0.00005) return '$0.00/hr';
+    if (n < 0.01) return '$' + n.toFixed(4) + '/hr';
+    return '$' + n.toFixed(3) + '/hr';
   }
 
-  /**
-   * How many of a machine's GPUs are rented, or null when that is not known.
-   * occupancy_code has one character per GPU, with D, R or I marking a rented
-   * one. When its length is not the GPU count, or only the rental counter says
-   * rented, the split was not reported and any percentage would be made up.
-   */
-  function rentedGpus(occ, gpus, isRented) {
-    if (!isRented) return 0;
-    if (gpus === 1) return 1;
-    const busy = occ.length === gpus ? (occ.match(/[DRI]/g) || []).length : 0;
-    return busy || null;
+  function formatAge(seconds) {
+    const s = num(seconds);
+    if (s < 90) return `${Math.round(s)}s`;
+    if (s < 5400) return `${Math.round(s / 60)}m`;
+    return `${Math.round(s / 3600)}h`;
   }
 
-  /**
-   * Render table row for a single machine
-   */
-  function renderMachineRow(m, index) {
-    const isRented = !!m.is_rented;
-    const isOnline = !!m.is_online;
-    const isListed = !!m.listed;
-    const gpus = parseInt(m.num_gpus, 10) || 1;
-    // occupancy_code is a per-GPU string (one char per GPU), so test for the
-    // letter rather than comparing the whole string to a single character.
-    const occ = String(m.occupancy_code || '');
-    const busyGpus = rentedGpus(occ, gpus, isRented);
-    let occDesc = 'Active';
-    if (occ.includes('D')) occDesc = 'On-Demand';
-    else if (occ.includes('R')) occDesc = 'Reserved';
-    else if (occ.includes('I')) occDesc = 'Interruptible';
+  // The text colours are Unraid's own classes, which read on light and dark
+  // themes alike. state: [colour, label, line under the label, bar fill]
+  const STATES = {
+    offline:  ['red-text',   'offline',  'Unreachable',    'fill-gray'],
+    rented:   ['green-text', 'active',   'Active',         'fill-green'],
+    listed:   ['blue-text',  'listed',   'Ready for rent', 'fill-blue'],
+    unlisted: ['grey-text',  'unlisted', 'Not listed',     'fill-gray'],
+  };
+  const RENTAL = { on_demand: 'On-Demand', reserved: 'Reserved', interruptible: 'Interruptible' };
 
-    // Status Column
-    let statusHtml = '';
-    if (!isOnline) {
-      statusHtml = `
-        <span class="vast-status-indicator vast-status-offline">
-          <span class="vast-status-dot"></span> offline
-        </span>
-        <div class="vast-status-sub">Unreachable</div>
+  function renderMachineRow(m) {
+    const state = STATES[m.state] ? m.state : 'unlisted';
+    const [colour, label, idleSub, stateFill] = STATES[state];
+    const rented = state === 'rented';
+    const gpus = num(m.num_gpus) || 1;
+    // null when the API did not say how many of the GPUs are rented.
+    const busy = m.gpus_rented === null || m.gpus_rented === undefined ? null : num(m.gpus_rented);
+
+    // Status
+    let sub = idleSub;
+    if (rented) {
+      // Print a job count only when the API gave one.
+      const jobs = num(m.running_rentals);
+      sub = (RENTAL[m.rental_type] || 'Active') + (jobs > 0 ? ` • ${jobs} ${jobs === 1 ? 'job' : 'jobs'}` : '');
+    }
+    const statusHtml = `
+      <span class="vast-status-indicator ${colour}"><span class="vast-status-dot"></span> ${label}</span>
+      <div class="vast-status-sub">${sub}</div>
+    `;
+
+    // Rate. Always per machine: what it earns when rented, what it asks when listed.
+    let rateHtml = `
+      <span class="vast-rate-val vast-dim">$0.00/hr</span>
+      <div class="vast-rate-sub">-</div>
+    `;
+    if (rented) {
+      // On a partly rented host the other GPUs are still for rent.
+      const ask = m.listed && busy !== null && busy < gpus && num(m.listed_gpu_cost) > 0
+        ? ` &middot; ask ${formatRate(m.listed_gpu_cost)}/GPU` : '';
+      rateHtml = `
+        <span class="vast-rate-val green-text">+${formatRate(m.earn_hour)}</span>
+        <div class="vast-rate-sub">Est. ${formatMoney(m.earn_day)}/day${ask}</div>
       `;
-    } else if (isRented) {
-      // The counter can be 0 while the occupancy letters say rented. Print a
-      // job count only when the API gave one.
-      const jobs = parseInt(m.running_rentals, 10) || 0;
-      const jobsText = jobs > 0 ? ` • ${jobs} ${jobs === 1 ? 'job' : 'jobs'}` : '';
-      statusHtml = `
-        <span class="vast-status-indicator vast-status-active">
-          <span class="vast-status-dot"></span> active
-        </span>
-        <div class="vast-status-sub">${occDesc}${jobsText}</div>
-      `;
-    } else if (isListed) {
-      statusHtml = `
-        <span class="vast-status-indicator vast-status-idle">
-          <span class="vast-status-dot"></span> listed
-        </span>
-        <div class="vast-status-sub">Ready for rent</div>
-      `;
-    } else {
-      statusHtml = `
-        <span class="vast-status-indicator vast-status-unlisted">
-          <span class="vast-status-dot"></span> unlisted
-        </span>
-        <div class="vast-status-sub">Not listed</div>
+    } else if (state === 'listed') {
+      rateHtml = `
+        <span class="vast-rate-val">${formatRate(m.ask_hour)}</span>
+        <div class="vast-rate-sub">Min: ${formatRate(m.min_bid_hour)}${gpus > 1 ? ` &middot; ${formatRate(m.listed_gpu_cost)}/GPU` : ''}</div>
       `;
     }
 
-    // Rate Column
-    let rateHtml = '';
-    if (isRented) {
-      rateHtml = `
-        <span class="vast-rate-val vast-rate-earning">+${formatRate(m.earn_hour)}</span>
-        <div class="vast-rate-sub">Est. ${formatMoney(m.earn_day)}/day</div>
-      `;
-    } else if (isListed && isOnline) {
-      // listed_gpu_cost and min_bid_price are PER GPU, while earn_hour in the
-      // branch above is per machine. Scale to machine level so the same column
-      // always means the same thing, and show the per-GPU ask alongside it.
-      const askMachine = (parseFloat(m.listed_gpu_cost) || 0) * gpus;
-      const minMachine = (parseFloat(m.min_bid_price) || 0) * gpus;
-      rateHtml = `
-        <span class="vast-rate-val">${formatRate(askMachine)}</span>
-        <div class="vast-rate-sub">Min: ${formatRate(minMachine)}${gpus > 1 ? ` &middot; ${formatRate(m.listed_gpu_cost)}/GPU` : ''}</div>
-      `;
-    } else {
-      rateHtml = `
-        <span class="vast-rate-val" style="opacity: .6;">$0.00/hr</span>
-        <div class="vast-rate-sub">-</div>
-      `;
-    }
-
-    // Temperature Column
+    // Temperature
     let tempHtml = '-';
     if (m.gpu_temp !== null && m.gpu_temp !== undefined) {
-      let tempClass = 'vast-temp-cool';
-      if (m.gpu_temp >= 80) tempClass = 'vast-temp-hot';
-      else if (m.gpu_temp >= 65) tempClass = 'vast-temp-warm';
-      tempHtml = `<span class="${tempClass}">${m.gpu_temp} °C</span>`;
+      const temp = num(m.gpu_temp);
+      const tempClass = temp >= 80 ? 'red-text vast-temp-hot' : temp >= 65 ? 'orange-text' : 'green-text';
+      tempHtml = `<span class="${tempClass}">${temp} °C</span>`;
     }
 
-    // Reliability Column (SMART healthy style)
+    // Reliability
     let reliabHtml = '-';
     if (m.reliability !== null && m.reliability !== undefined) {
-      if (m.reliability >= 95) {
-        reliabHtml = `<span class="vast-smart-ok"><i class="fa fa-check"></i> ${m.reliability}%</span>`;
-      } else {
-        reliabHtml = `<span class="vast-smart-warn"><i class="fa fa-exclamation-triangle"></i> ${m.reliability}%</span>`;
-      }
+      const rel = num(m.reliability);
+      reliabHtml = rel >= 95
+        ? `<span class="vast-smart green-text"><i class="fa fa-check"></i> ${rel}%</span>`
+        : `<span class="vast-smart orange-text"><i class="fa fa-exclamation-triangle"></i> ${rel}%</span>`;
     }
 
-    // Utilization Bar Column
+    // Utilization: the share of this machine's GPUs that are rented. With an
+    // unknown split the bar is filled, because something is rented, but no
+    // number is printed.
     let utilPercent = 0;
     let utilText = '0%';
-    let fillClass = 'fill-gray';
-    if (isRented) {
-      // Share of GPUs rented. With an unknown split the bar is filled, because
-      // something is rented, but no number is printed.
-      utilPercent = busyGpus === null ? 100 : Math.round(100 * busyGpus / gpus);
-      utilText = busyGpus === null ? '&ndash;' : `${utilPercent}%`;
-      fillClass = occDesc === 'Interruptible' ? 'fill-amber' : 'fill-green';
-    } else if (isListed) {
-      fillClass = 'fill-blue';
+    let fill = stateFill;
+    if (rented) {
+      utilPercent = busy === null ? 100 : Math.min(100, Math.round(100 * busy / gpus));
+      utilText = busy === null ? '&ndash;' : `${utilPercent}%`;
+      if (m.rental_type === 'interruptible') fill = 'fill-amber';
     }
-
+    const utilTitle = rented && busy === null ? ' title="Rented. The API did not report how many GPUs."' : '';
     const utilHtml = `
-      <span class="vast-util-text"${busyGpus === null ? ' title="Rented. The API did not report how many GPUs."' : ''}>${utilText}</span>
+      <span class="vast-util-text"${utilTitle}>${utilText}</span>
       <div class="vast-util-bar">
-        <div class="vast-util-fill ${fillClass}" style="width: ${utilPercent}%;"></div>
+        <div class="vast-util-fill ${fill}" style="width: ${utilPercent}%;"></div>
       </div>
     `;
 
-    // Main row
+    const ram = num(m.gpu_ram_gb);
     let html = `
       <tr class="vast-row">
         <td class="vast-col-device">
@@ -171,7 +146,7 @@
             <i class="fa fa-desktop vast-icon-host"></i>
             <span>${escapeHtml(m.hostname)}</span>
           </div>
-          <div class="vast-dev-sub">#${escapeHtml(m.id)} • ${m.num_gpus}x ${escapeHtml(m.gpu_name)} ${m.gpu_ram_gb ? `(${m.gpu_ram_gb} GB)` : ''}</div>
+          <div class="vast-dev-sub">#${escapeHtml(m.id)} • ${gpus}x ${escapeHtml(m.gpu_name)} ${ram ? `(${ram} GB)` : ''}</div>
         </td>
         <td class="vast-col-status">${statusHtml}</td>
         <td class="vast-col-rate">${rateHtml}</td>
@@ -181,31 +156,28 @@
       </tr>
     `;
 
-    // Expandable hardware details row
     if (showHardwareDetails) {
       const details = [];
+      const item = (icon, text) => details.push(`<div class="vast-details-item"><i class="fa ${icon}"></i> ${text}</div>`);
       if (m.cpu_name) {
-        details.push(`<div class="vast-details-item"><i class="fa fa-server"></i> CPU: <strong>${escapeHtml(m.cpu_name)}${m.cpu_cores ? ` (${m.cpu_cores}C)` : ''}</strong></div>`);
+        item('fa-server', `CPU: <strong>${escapeHtml(m.cpu_name)}${num(m.cpu_cores) ? ` (${num(m.cpu_cores)}C)` : ''}</strong>`);
       }
-      if (m.cpu_ram_gb) {
-        details.push(`<div class="vast-details-item"><i class="fa fa-memory"></i> RAM: <strong>${m.cpu_ram_gb} GB</strong></div>`);
+      if (num(m.cpu_ram_gb)) {
+        item('fa-microchip', `RAM: <strong>${num(m.cpu_ram_gb)} GB</strong>`);
       }
-      if (m.disk_space_gb) {
-        details.push(`<div class="vast-details-item"><i class="fa fa-hdd-o"></i> Disk: <strong>${m.disk_space_gb} GB (${m.avail_disk_gb} GB Free)</strong></div>`);
+      if (num(m.disk_space_gb)) {
+        item('fa-hdd-o', `Disk: <strong>${num(m.disk_space_gb)} GB (${num(m.avail_disk_gb)} GB Free)</strong>`);
       }
-      if (m.inet_down_mbps && m.inet_up_mbps) {
-        details.push(`<div class="vast-details-item"><i class="fa fa-exchange"></i> Net: <strong>${m.inet_down_mbps} ↓ / ${m.inet_up_mbps} ↑ Mbps</strong></div>`);
+      if (num(m.inet_down_mbps) && num(m.inet_up_mbps)) {
+        item('fa-exchange', `Net: <strong>${num(m.inet_down_mbps)} ↓ / ${num(m.inet_up_mbps)} ↑ Mbps</strong>`);
       }
       if (m.verification) {
-        details.push(`<div class="vast-details-item"><i class="fa fa-shield"></i> Host Status: <strong>${escapeHtml(m.verification)}</strong></div>`);
+        item('fa-shield', `Verification: <strong>${escapeHtml(m.verification)}</strong>`);
       }
-
       html += `
         <tr class="vast-details-row">
           <td colspan="6">
-            <div class="vast-details-grid">
-              ${details.join('')}
-            </div>
+            <div class="vast-details-grid">${details.join('')}</div>
           </td>
         </tr>
       `;
@@ -215,66 +187,61 @@
   }
 
   function renderTile(data) {
-    const $container = $('#vast_widget_container');
-    const $subtitle = $('#vast_subtitle');
-
     const sum = data.summary || {};
-    const totalEarn = sum.total_earn_hour || 0;
-    const totalEarnDay = sum.total_earn_day || 0;
-    const balance = sum.account_balance || 0;
-    const rentedCount = sum.rented_machines || 0;
-    const totalCount = sum.total_machines || 0;
-    const machines = data.machines || [];
+    const machines = Array.isArray(data.machines) ? data.machines : [];
+    const total = num(sum.total_machines);
+    const online = sum.online_machines === undefined ? total : num(sum.online_machines);
 
-    // Subtitle. The backend emits stale/cached/cache_age on its degradation
-    // paths, so surface them instead of always claiming ONLINE.
-    const rented = `${rentedCount} of ${totalCount} Rented`;
-    if (data.stale) {
-      $subtitle.html(`<span class="vast-stale">Status: STALE</span> • ${rented}`);
-    } else if (data.cached && data.cache_age > 0) {
-      $subtitle.html(`Status: ONLINE • ${rented} • cached ${data.cache_age}s ago`);
+    // The header says whether the hosts are online. That the API answered is
+    // not the same thing, and stale data is never called online.
+    let hosts = `${online}/${total} ONLINE`;
+    if (online === total) hosts = 'ONLINE';
+    else if (online === 0) hosts = 'OFFLINE';
+    const rented = `${num(sum.rented_machines)} of ${total} Rented`;
+    const $subtitle = $('#vast_subtitle');
+    if (total === 0) {
+      $subtitle.text('No machines');
+    } else if (data.stale) {
+      $subtitle.html(`<span class="vast-stale orange-text">Status: STALE</span> • ${rented} • data ${formatAge(data.cache_age)} old`);
+    } else if (data.cached && num(data.cache_age) > 0) {
+      $subtitle.html(`Status: ${hosts} • ${rented} • cached ${num(data.cache_age)}s ago`);
     } else {
-      $subtitle.html(`Status: ONLINE • ${rented}`);
+      $subtitle.html(`Status: ${hosts} • ${rented}`);
     }
 
+    // Most polls return the data that is already on screen. Leaving the table
+    // alone keeps a text selection or a hover alive between polls.
+    const key = [data.timestamp, showHardwareDetails, data.warning || '', machines.length].join('|');
+    if (key === lastRenderKey) return;
+    lastRenderKey = key;
 
-    // Summary Line (matching PROCESSOR "Total Power 103.74 W | Temperature: 78 °C" / ARRAY "3.98 TB used...")
-    let earnSummary = '';
-    if (totalEarn > 0) {
-      earnSummary = `Total Earnings: <strong class="rate-highlight">+${formatRate(totalEarn)}</strong> (Est. ${formatMoney(totalEarnDay, 2)}/day)`;
-    } else {
-      earnSummary = `Total Earnings: <strong>$0.00/hr</strong> (Idle)`;
-    }
-
-    const balanceText = balance > 0 ? ` | Balance: <strong>${formatMoney(balance, 2)}</strong>` : '';
-    const detailsToggleLabel = showHardwareDetails ? 'Hide details' : 'Show details';
-
-    const summaryLineHtml = `
-      <div class="vast-summary-line">
-        <div>
-          ${earnSummary}${balanceText}
-        </div>
-        <div>
-          <a class="vast-toggle-details" id="vast_toggle_details">${detailsToggleLabel}</a>
-        </div>
-      </div>
-    `;
-
-    // Table
+    const $container = $('#vast_widget_container');
+    const warning = data.warning ? `<div class="vast-msg-box vast-warn orange-text">${escapeHtml(data.warning)}</div>` : '';
     if (machines.length === 0) {
       $container.html(`
-        <div class="vast-msg-box">
-          <i class="fa fa-server" style="font-size: 20px; opacity: 0.5; margin-bottom: 6px; display: block;"></i>
+        ${warning}
+        <div class="vast-msg-box grey-text">
+          <i class="fa fa-server vast-msg-icon"></i>
           No host machines found on this Vast.ai account.
         </div>
       `);
       return;
     }
 
-    const rowsHtml = machines.map(renderMachineRow).join('');
+    const earn = num(sum.total_earn_hour);
+    const earnSummary = earn >= 0.00005
+      ? `Total Earnings: <strong><span class="green-text">+${formatRate(earn)}</span></strong> (Est. ${formatMoney(sum.total_earn_day)}/day)`
+      : 'Total Earnings: <strong>$0.00/hr</strong> (Idle)';
+    // null means the balance is not known. It is hidden, never shown as $0.00.
+    const known = sum.account_balance !== null && sum.account_balance !== undefined;
+    const balanceText = known ? ` | Balance: <strong>${formatMoney(sum.account_balance)}</strong>` : '';
 
-    const tableHtml = `
-      ${summaryLineHtml}
+    $container.html(`
+      ${warning}
+      <div class="vast-summary-line">
+        <div>${earnSummary}${balanceText}</div>
+        <div><a class="vast-toggle-details" data-vast="details">${showHardwareDetails ? 'Hide details' : 'Show details'}</a></div>
+      </div>
       <table class="vast-table">
         <thead>
           <tr>
@@ -283,115 +250,88 @@
             <th class="vast-col-rate">RATE</th>
             <th class="vast-col-temp">TEMP</th>
             <th class="vast-col-smart">RELIABILITY</th>
-            <th class="vast-col-util">UTILIZATION</th>
+            <th class="vast-col-util" title="Share of this machine's GPUs that are rented">UTILIZATION</th>
           </tr>
         </thead>
-        <tbody>
-          ${rowsHtml}
-        </tbody>
+        <tbody>${machines.map(renderMachineRow).join('')}</tbody>
       </table>
-    `;
-
-    $container.html(tableHtml);
-
-    if (data.warning) {
-      $container.prepend(`<div class="vast-msg-box vast-warn">${escapeHtml(data.warning)}</div>`);
-    }
-
-    // Toggling details is pure local state. Re-render from the payload we
-    // already have instead of refetching, which also avoids the in-flight
-    // isFetching guard swallowing the click.
-    $('#vast_toggle_details').off('click').on('click', function (e) {
-      e.preventDefault();
-      showHardwareDetails = !showHardwareDetails;
-      if (lastData) renderTile(lastData);
-    });
+    `);
   }
 
-  /**
-   * Main refresh and render
-   */
-  window.vastai_refresh = function (force = false) {
+  // Replaces the table with a message. `link` is [text, href or data-vast action].
+  function showMessage(subtitle, icon, colour, text, link) {
+    lastRenderKey = null;
+    $('#vast_subtitle').text(subtitle);
+    const attr = link && link[1].startsWith('/') ? `href="${link[1]}"` : `data-vast="${link ? link[1] : ''}"`;
+    $('#vast_widget_container').html(`
+      <div class="vast-msg-box ${colour}">
+        <i class="fa ${icon} vast-msg-icon"></i>
+        ${escapeHtml(text)}
+        ${link ? `<br><br><a ${attr}>${link[0]}</a>` : ''}
+      </div>
+    `);
+  }
+
+  const SETTINGS = ['Go to Vast.ai Settings', '/Settings/VastAISettings'];
+
+  function refresh(force) {
     if (isFetching) return;
     isFetching = true;
-
     const $icon = $('#vast_refresh_icon');
-    const $container = $('#vast_widget_container');
-    const $subtitle = $('#vast_subtitle');
-
-    if ($icon.length) $icon.addClass('spinning');
-
-    const url = '/plugins/vastai/include/getvaststatus.php' + (force ? '?force=1' : '');
+    $icon.addClass('spinning');
 
     $.ajax({
-      url: url,
+      url: ENDPOINT + (force ? '?force=1' : ''),
       type: 'GET',
       dataType: 'json',
       cache: false,
       // Above the backend's worst case (9 s machines + 5 s balance), so a slow
-      // API reads as slow rather than as the local service being down.
+      // API reads as slow and not as the local service being down.
       timeout: 20000,
       success: function (data) {
-        if ($icon.length) $icon.removeClass('spinning');
+        $icon.removeClass('spinning');
         isFetching = false;
 
-        if (!data || !data.success) {
-          if (data && data.not_configured) {
-            $subtitle.text('Not Configured');
-            $container.html(`
-              <div class="vast-msg-box">
-                <i class="fa fa-key" style="font-size: 20px; color: #38bdf8; margin-bottom: 6px; display: block;"></i>
-                ${escapeHtml(data.error || 'Please configure your Vast.ai API Key.')}
-                <br><br>
-                <a href="/Settings/VastAISettings">Go to Vast.ai Settings</a>
-              </div>
-            `);
-            return;
-          }
-
-          $subtitle.text('Connection Error');
-          $container.html(`
-            <div class="vast-msg-box" style="color: #ff3b30;">
-              <i class="fa fa-exclamation-triangle" style="font-size: 20px; margin-bottom: 6px; display: block;"></i>
-              ${escapeHtml(data ? data.error : 'Failed to connect to Vast.ai API.')}
-              <br><br>
-              <a href="javascript:void(0)" onclick="window.vastai_refresh(true)">Retry Connection</a>
-            </div>
-          `);
-          return;
+        if (data && data.success) {
+          lastData = data;
+          renderTile(data);
+        } else if (data && data.code === 'not_configured') {
+          // Nothing changes until the user saves a key, which is a page load.
+          setupPolling(0);
+          showMessage('Not Configured', 'fa-key', 'blue-text', data.error || 'Please configure your Vast.ai API Key.', SETTINGS);
+        } else if (data && data.code === 'auth') {
+          // Retrying cannot fix a rejected key. Changing it can.
+          showMessage('API Key Rejected', 'fa-key', 'red-text', data.error, SETTINGS);
+        } else {
+          showMessage('Vast.ai Unreachable', 'fa-exclamation-triangle', 'red-text',
+            data && data.error ? data.error : 'Failed to connect to Vast.ai API.', ['Retry', 'retry']);
         }
-
-        lastData = data;
-        renderTile(data);
       },
-      error: function (xhr, status, err) {
-        if ($icon.length) $icon.removeClass('spinning');
+      error: function (xhr, status) {
+        $icon.removeClass('spinning');
         isFetching = false;
-        $subtitle.text('Error');
-        $container.html(`
-          <div class="vast-msg-box" style="color: #ff3b30;">
-            <i class="fa fa-plug" style="font-size: 20px; margin-bottom: 6px; display: block;"></i>
-            Failed to connect to local Vast.ai service (${escapeHtml(status)}).
-            <br><br>
-            <a href="javascript:void(0)" onclick="window.vastai_refresh(true)">Retry</a>
-          </div>
-        `);
+        if (status === 'parsererror') {
+          // The login page came back in place of JSON: the session ended, or
+          // the server restarted. Polling cannot recover from that.
+          setupPolling(0);
+          showMessage('Signed Out', 'fa-sign-in', 'red-text', 'The Unraid session has ended. Reload the page to sign in again.');
+        } else {
+          showMessage('Error', 'fa-plug', 'red-text', `Failed to reach the plugin on this server (${status}).`, ['Retry', 'retry']);
+        }
       }
     });
-  };
+  }
 
   function setupPolling(intervalSec) {
     if (pollTimer) {
       clearInterval(pollTimer);
       pollTimer = null;
     }
-
     const sec = parseInt(intervalSec, 10);
     if (!isNaN(sec) && sec > 0) {
       pollTimer = setInterval(function () {
-        if (!document.hidden) {
-          window.vastai_refresh(false);
-        }
+        // A hidden tab and a closed tile have nobody to show new data to.
+        if (!document.hidden && $('#vast_tile').is(':visible')) refresh(false);
       }, sec * 1000);
     }
   }
@@ -400,19 +340,35 @@
     const $tile = $('#vast_tile');
     if (!$tile.length) return;
 
-    // ?? not ||: 0 is the "Off / Manual only" setting and must stay 0.
-    const initialInterval = $tile.data('interval') ?? 30;
-
     $('#vast_int').on('change', function () {
       setupPolling($(this).val());
     });
 
     $('#vast_btn_refresh').on('click', function (e) {
       e.preventDefault();
-      window.vastai_refresh(true);
+      refresh(true);
     });
 
-    setupPolling(initialInterval);
-    window.vastai_refresh(false);
+    // One handler for the links the tile draws inside its body.
+    $('#vast_widget_container').on('click', '[data-vast]', function (e) {
+      e.preventDefault();
+      if (this.getAttribute('data-vast') === 'retry') {
+        refresh(true);
+      } else if (lastData) {
+        // Showing details is local state. Redraw what is already here.
+        showHardwareDetails = !showHardwareDetails;
+        renderTile(lastData);
+      }
+    });
+
+    // Coming back to the tab, or waking the laptop, should not leave old data
+    // on screen until the next tick.
+    document.addEventListener('visibilitychange', function () {
+      if (!document.hidden && pollTimer) refresh(false);
+    });
+
+    // ?? not ||: 0 is the "Off" setting and must stay 0.
+    setupPolling($tile.data('interval') ?? 30);
+    refresh(false);
   });
 })();

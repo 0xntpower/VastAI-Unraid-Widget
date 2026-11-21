@@ -1,54 +1,48 @@
 <?php
 /**
- * Vast.ai Unraid Plugin - Dashboard Tile Builder
- * Conforms strictly to Unraid's standardized dashboard design language.
+ * Vast.ai Unraid Plugin - dashboard tile shell
+ *
+ * Registers the empty tile with the dashboard. javascript/vastai.js fills it.
+ * The header uses the dashboard's own tile-header classes, which exist from
+ * Unraid 7.2.0. That is why the plugin asks for 7.2.0.
  */
 
 global $mytiles;
 
-$base = '/usr/local/emhttp/plugins/vastai';
-$config_file = '/boot/config/plugins/vastai/vastai.cfg';
-$default_cfg = "$base/default.cfg";
+require_once __DIR__ . '/config.php';
 
-$cfg = [];
-if (file_exists($default_cfg)) {
-    $default_ini = @parse_ini_file($default_cfg);
-    if (is_array($default_ini)) {
-        $cfg = array_merge($cfg, $default_ini);
-    }
-}
-if (file_exists($config_file)) {
-    $user_ini = @parse_ini_file($config_file);
-    if (is_array($user_ini)) {
-        $cfg = array_merge($cfg, $user_ini);
-    }
-}
+// Empty except under test, see getvaststatus.php.
+$root     = PHP_SAPI === 'cli' ? (string) getenv('VASTAI_TEST_ROOT') : '';
+$cfg      = vast_config($root);
+$interval = $cfg['interval'];
 
-$interval = (int) ($cfg['INTERVAL'] ?? 30);
-$column   = $cfg['COLUMN'] ?? 'column1';
-if (!in_array($column, ['column1', 'column2', 'column3'], true)) {
-    $column = 'column1';
-}
+// autov() appends the file's modification time. The browser then keeps both
+// files until an update changes them, and a missing file is a visible 404 and
+// not a tile that says "Loading" forever.
+$asset = fn(string $path): string => function_exists('autov') ? autov($path, true) : $path;
+$css   = $asset('/plugins/vastai/styles/vastai.css');
+$js    = $asset('/plugins/vastai/javascript/vastai.js');
 
-$css = (string) @file_get_contents("$base/styles/vastai.css");
-$js  = (string) @file_get_contents("$base/javascript/vastai.js");
-
-$tr        = function_exists('_');
+// The dashboard stores a tile's position, its collapsed state and its closed
+// state under md5(title). Translating or renaming the title would reset all
+// three for every user, so it is a constant.
 $t_title   = 'VAST.AI';
+$tr        = function_exists('_');
 $t_refresh = $tr ? _('Refresh interval') : 'Refresh interval';
 $t_set     = $tr ? _('Vast.ai Settings') : 'Vast.ai Settings';
 $t_load    = $tr ? _('Loading Vast.ai status…') : 'Loading Vast.ai status…';
 
 $intOpts = '';
-foreach (['10' => '10 s', '30' => '30 s', '60' => '60 s', '120' => '2 m', '0' => 'off'] as $v => $lab) {
-    $sel = ($interval === (int) $v) ? ' selected' : '';
+foreach (VAST_INTERVALS as $v) {
+    $lab = $v === 0 ? 'off' : ($v < 120 ? "$v s" : ($v / 60) . ' m');
+    $sel = $interval === $v ? ' selected' : '';
     $intOpts .= "<option value=\"$v\"$sel>$lab</option>";
 }
 
-$mytiles['vastai'][$column] = <<<EOT
+$mytiles['vastai'][$cfg['column']] = <<<EOT
 <tbody title="$t_title" id="vast_tile" data-interval="$interval">
 <tr><td>
-<style>$css</style>
+<link type="text/css" rel="stylesheet" href="$css">
 <span class="tile-header">
   <span class="tile-header-left">
     <img src="/plugins/vastai/icons/vastai.png" class="vast-tile-glyph" alt="">
@@ -66,11 +60,11 @@ $mytiles['vastai'][$column] = <<<EOT
 </td></tr>
 <tr><td>
 <div id="vast_widget_container">
-  <div class="vast-msg-box">
-    <i class="fa fa-spinner fa-spin" style="font-size: 16px; margin-right: 6px;"></i> $t_load
+  <div class="vast-msg-box grey-text">
+    <i class="fa fa-spinner fa-spin vast-msg-spinner"></i> $t_load
   </div>
 </div>
-<script>$js</script>
+<script src="$js"></script>
 </td></tr>
 </tbody>
 EOT;

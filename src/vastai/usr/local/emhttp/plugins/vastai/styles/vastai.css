@@ -1,7 +1,10 @@
 /**
- * Vast.ai Unraid Plugin - Native Dashboard Styling
- * Strict adherence to Unraid's native standardized dashboard design language:
- * clean tables, uppercase headers, status dots, SMART-style checks, and flat usage bars.
+ * Vast.ai Unraid Plugin - dashboard tile styles
+ *
+ * Text colours come from Unraid's theme variables (defined from 7.1.0) and from
+ * its green-text, orange-text, red-text, blue-text and grey-text classes, which
+ * the tile script puts on the elements. Nothing here names a text colour of its
+ * own, so the tile follows every theme, light or dark.
  */
 
 /* Header & Controls */
@@ -20,7 +23,7 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--text-color, #fff);
+  color: var(--text-color);
   margin: 0;
   vertical-align: middle;
 }
@@ -28,7 +31,7 @@
 .vast-tile-sub {
   font-size: 12px;
   font-weight: normal;
-  color: var(--alt-text-color, #94a3b8);
+  color: var(--alt-text-color);
   margin-left: 10px;
   vertical-align: middle;
 }
@@ -44,21 +47,21 @@
   padding: 1px 4px;
   height: 22px;
   border-radius: 3px;
-  background: var(--mild-background-color, #282e3d);
-  color: var(--text-color, #e2e8f0);
-  border: 1px solid var(--border-color, rgba(255,255,255,0.15));
+  background: var(--mild-background-color, transparent);
+  color: var(--text-color);
+  border: 1px solid var(--border-color, rgba(128, 128, 128, 0.3));
   cursor: pointer;
 }
 
 .vast-header-controls i.control {
   font-size: 13px;
-  color: var(--alt-text-color, #94a3b8);
+  color: var(--alt-text-color);
   cursor: pointer;
   transition: color 0.15s ease;
 }
 
 .vast-header-controls i.control:hover {
-  color: var(--text-color, #fff);
+  color: var(--text-color);
 }
 
 .vast-header-controls i.spinning {
@@ -77,22 +80,17 @@
   justify-content: space-between;
   padding: 4px 0 8px 0;
   font-size: 12px;
-  color: var(--alt-text-color, #94a3b8);
-  border-bottom: 1px solid var(--border-color, rgba(255,255,255,0.08));
+  color: var(--alt-text-color);
+  border-bottom: 1px solid var(--border-color, rgba(128, 128, 128, 0.3));
   margin-bottom: 6px;
 }
 
 .vast-summary-line strong {
-  color: var(--text-color, #fff);
-}
-
-.vast-summary-line .rate-highlight {
-  color: #4cd964;
-  font-weight: 700;
+  color: var(--text-color);
 }
 
 .vast-toggle-details {
-  color: var(--accent, #38bdf8);
+  color: var(--link-text-color);
   cursor: pointer;
   font-size: 11px;
   text-decoration: none;
@@ -109,7 +107,7 @@ table.vast-table {
   border-collapse: collapse;
   font-size: 12px;
   line-height: 1.4;
-  color: var(--text-color, #e2e8f0);
+  color: var(--text-color);
 }
 
 table.vast-table thead th {
@@ -117,16 +115,16 @@ table.vast-table thead th {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: var(--alt-text-color, #8c8c8c);
+  color: var(--alt-text-color);
   text-align: left;
   padding: 4px 8px;
   border: none;
-  border-bottom: 1px solid var(--border-color, rgba(255,255,255,0.1));
+  border-bottom: 1px solid var(--border-color, rgba(128, 128, 128, 0.3));
   white-space: nowrap;
 }
 
 table.vast-table tbody tr.vast-row {
-  border-bottom: 1px solid var(--border-color, rgba(255,255,255,0.06));
+  border-bottom: 1px solid var(--border-color, rgba(128, 128, 128, 0.3));
   transition: background-color 0.15s ease;
 }
 
@@ -149,19 +147,19 @@ table.vast-table tbody td {
   align-items: center;
   gap: 7px;
   font-weight: 600;
-  color: var(--text-color, #fff);
+  color: var(--text-color);
 }
 
 .vast-dev-name i.vast-icon-host {
   font-size: 14px;
-  color: #38bdf8;
+  color: var(--alt-text-color);
   width: 16px;
   text-align: center;
 }
 
 .vast-dev-sub {
   font-size: 11px;
-  color: var(--alt-text-color, #8c8c8c);
+  color: var(--alt-text-color);
   margin-left: 23px;
   margin-top: 1px;
 }
@@ -184,23 +182,12 @@ table.vast-table tbody td {
   width: 7px;
   height: 7px;
   border-radius: 50%;
+  background: currentColor;
 }
-
-.vast-status-active { color: #4cd964; }
-.vast-status-active .vast-status-dot { background: #4cd964; }
-
-.vast-status-idle { color: #38bdf8; }
-.vast-status-idle .vast-status-dot { background: #38bdf8; }
-
-.vast-status-offline { color: #ff3b30; }
-.vast-status-offline .vast-status-dot { background: #ff3b30; }
-
-.vast-status-unlisted { color: #8c8c8c; }
-.vast-status-unlisted .vast-status-dot { background: #8c8c8c; }
 
 .vast-status-sub {
   font-size: 10.5px;
-  color: var(--alt-text-color, #8c8c8c);
+  color: var(--alt-text-color);
   margin-left: 12px;
   margin-top: 1px;
 }
@@ -215,13 +202,13 @@ table.vast-table tbody td {
   font-variant-numeric: tabular-nums;
 }
 
-.vast-rate-earning {
-  color: #4cd964;
+.vast-dim {
+  opacity: 0.6;
 }
 
 .vast-rate-sub {
   font-size: 10.5px;
-  color: var(--alt-text-color, #8c8c8c);
+  color: var(--alt-text-color);
 }
 
 /* Column 4: Temp */
@@ -231,24 +218,14 @@ table.vast-table tbody td {
   font-weight: 500;
 }
 
-.vast-temp-cool { color: #4cd964; }
-.vast-temp-warm { color: #ff9500; }
-.vast-temp-hot  { color: #ff3b30; font-weight: 700; }
+.vast-temp-hot { font-weight: 700; }
 
 /* Column 5: Reliability / Health */
 .vast-col-smart {
   white-space: nowrap;
 }
 
-.vast-smart-ok {
-  color: #4cd964;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.vast-smart-warn {
-  color: #ff9500;
+.vast-smart {
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -267,26 +244,26 @@ table.vast-table tbody td {
   text-align: right;
   margin-right: 6px;
   font-size: 11.5px;
-  color: var(--text-color, #e2e8f0);
+  color: var(--text-color);
 }
 
 .vast-util-bar {
   display: inline-block;
   width: 60px;
   height: 8px;
-  background-color: var(--border-color, rgba(255, 255, 255, 0.15));
+  background-color: var(--border-color, rgba(128, 128, 128, 0.3));
   border-radius: 0;
   overflow: hidden;
   vertical-align: middle;
 }
 
+/* The bar fills are backgrounds, not text, so they keep fixed colours. */
 .vast-util-fill {
   height: 100%;
-  background-color: #4cd964;
 }
 
+.vast-util-fill.fill-green { background-color: #4cd964; }
 .vast-util-fill.fill-amber { background-color: #ff9500; }
-.vast-util-fill.fill-red   { background-color: #ff3b30; }
 .vast-util-fill.fill-blue  { background-color: #38bdf8; }
 .vast-util-fill.fill-gray  { background-color: #555555; }
 
@@ -294,7 +271,7 @@ table.vast-table tbody td {
 tr.vast-details-row td {
   background: rgba(0, 0, 0, 0.15);
   padding: 6px 12px 10px 12px;
-  border-bottom: 1px solid var(--border-color, rgba(255,255,255,0.08));
+  border-bottom: 1px solid var(--border-color, rgba(128, 128, 128, 0.3));
 }
 
 .vast-details-grid {
@@ -302,7 +279,7 @@ tr.vast-details-row td {
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 6px 16px;
   font-size: 11px;
-  color: var(--alt-text-color, #94a3b8);
+  color: var(--alt-text-color);
 }
 
 .vast-details-item {
@@ -317,30 +294,42 @@ tr.vast-details-row td {
 }
 
 .vast-details-item strong {
-  color: var(--text-color, #e2e8f0);
+  color: var(--text-color);
 }
 
 /* Empty & Error Messages */
+/* No colour here. This stylesheet loads after Unraid's, so a colour on the box
+   would beat the grey-text, red-text or orange-text class the script gives it. */
 .vast-msg-box {
   padding: 16px;
   text-align: center;
-  color: var(--alt-text-color, #94a3b8);
   font-size: 12px;
 }
 
 .vast-msg-box a {
-  color: #38bdf8;
+  color: var(--link-text-color);
   text-decoration: underline;
+  cursor: pointer;
+}
+
+.vast-msg-icon {
+  display: block;
+  font-size: 20px;
+  margin-bottom: 6px;
+  opacity: 0.8;
+}
+
+.vast-msg-spinner {
+  font-size: 16px;
+  margin-right: 6px;
 }
 
 .vast-stale {
-  color: #f59e0b;
   font-weight: 600;
 }
 
 .vast-warn {
-  color: #f59e0b;
-  border: 1px solid rgba(245, 158, 11, 0.35);
+  border: 1px solid currentColor;
   border-radius: 4px;
   margin-bottom: 8px;
 }

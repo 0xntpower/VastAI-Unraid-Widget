@@ -1,0 +1,32 @@
+rm -rf &emhttp;
+rm -rf &cache;
+rm -f &oldcache;*
+mkdir -p &plugin;
+mkdir -p &emhttp;/icons
+mkdir -p &emhttp;/images
+mkdir -p &emhttp;/include
+mkdir -p &emhttp;/javascript
+mkdir -p &emhttp;/styles
+
+# ----
+echo ""
+echo "----------------------------------------------------"
+echo " &name; has been installed successfully!           "
+echo " Version: &version;                                 "
+echo "----------------------------------------------------"
+echo " Next step: Navigate to Settings -> Utilities ->   "
+echo " Vast.ai Monitor to enter your Vast.ai API Key.     "
+echo "----------------------------------------------------"
+echo ""
+
+# ----
+echo "Removing &name;..."
+rm -rf &emhttp;
+rm -rf &cache;
+rm -f &oldcache;*
+if [ -f &plugin;/&name;.cfg ]; then
+  sed -i 's|^API_KEY=.*|API_KEY=""|' &plugin;/&name;.cfg
+  echo "Vast.ai API key blanked in &plugin;/&name;.cfg"
+  echo "Copies may remain in flash backups. Delete the key at https://console.vast.ai/manage-keys/"
+fi
+echo "&name; has been removed."
