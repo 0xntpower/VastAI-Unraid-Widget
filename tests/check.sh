@@ -246,6 +246,8 @@ else
 fi
 if command -v node >/dev/null 2>&1; then
   node --check "$SRC/javascript/vastai.js" && pass "node --check vastai.js" || bad "node --check vastai.js"
+  # A partly rented multi-GPU host once showed 100% utilization and "1 job".
+  node "$ROOT/tests/tile.test.js" >/dev/null && pass "tile prints per-GPU utilization and real job counts" || bad "tests/tile.test.js"
 else
   skip "node not installed, cannot check JS"
 fi
